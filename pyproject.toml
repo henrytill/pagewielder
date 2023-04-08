@@ -19,7 +19,7 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-main = "pdf_tools:main"
+pdf-tools = "pdf_tools.__main__:main"
 
 [tool.black]
 line-length = 88

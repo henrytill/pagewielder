@@ -1,4 +1,5 @@
 import argparse
+import tempfile
 from pathlib import Path
 
 import pikepdf
@@ -43,21 +44,22 @@ def main():
     )
 
     args = parser.parse_args()
-    pdf_path = args.input
+    input_path = args.input
 
     if args.output:
         output_path = args.output
     else:
-        output_path = pdf_path.with_stem(f"{pdf_path.stem}-filtered")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmpfile:
+            output_path = Path(tmpfile.name)
 
-    dimensions_to_pages_map = pdf_tools.map_page_dimensions_to_pages(pdf_path)
+    dimensions_to_pages_map = pdf_tools.map_page_dimensions_to_pages(input_path)
     selected_dimensions_set = user_select_multiple_dimensions(dimensions_to_pages_map)
 
     selected_pages = set()
     for dimensions in selected_dimensions_set:
         selected_pages.update(dimensions_to_pages_map[dimensions])
 
-    with pikepdf.open(pdf_path) as pdf, pikepdf.Pdf.new() as output_pdf:
+    with pikepdf.open(input_path) as pdf, pikepdf.Pdf.new() as output_pdf:
         for i, page in enumerate(pdf.pages, start=1):
             if i not in selected_pages:
                 output_pdf.pages.append(page)
