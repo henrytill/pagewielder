@@ -1,6 +1,6 @@
 import argparse
-from argparse import Namespace
 import tempfile
+from argparse import Namespace
 from pathlib import Path
 from typing import Optional
 
@@ -17,14 +17,12 @@ def user_select_multiple_dimensions(
     Prompt the user to one or more dimensions from a list of dimensions and the
     corresponding number of pages.
     """
-    dimensions_list = sorted(
-        dimensions_to_pages_map.keys(), key=lambda x: (-x[1], x[0])
-    )
+    dimensions_list = list(dimensions_to_pages_map.keys())
     print("Available dimensions (width x height) and number of pages:")
     for i, dimensions in enumerate(dimensions_list):
         width, height = dimensions
         num_pages = len(dimensions_to_pages_map[dimensions])
-        print(f"{i}: {width:4.2f} x {height:4.2f} ({num_pages} pages)")
+        print(f"{i}: {width:.2f} x {height:.2f} ({num_pages} pages)")
 
     while True:
         user_input = input(
@@ -43,10 +41,10 @@ def user_select_multiple_dimensions(
 
 
 def filter_command(args: Namespace):
-    input_path = args.input
+    input_path: Path = args.input
 
     if args.output:
-        output_path = args.output
+        output_path: Path = args.output
     else:
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmpfile:
             output_path = Path(tmpfile.name)
@@ -58,7 +56,7 @@ def filter_command(args: Namespace):
         print("No page sets selected. No output file created.")
         return
 
-    selected_pages = set()
+    selected_pages: Pages = set()
     for dimensions in selected_dimensions_set:
         selected_pages.update(dimensions_to_pages_map[dimensions])
 
