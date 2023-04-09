@@ -6,8 +6,8 @@ from typing import Optional
 
 import pikepdf
 
-import pdf_tools
-from pdf_tools import Dimensions, Pages
+import pagewielder
+from pagewielder import Dimensions, Pages
 
 
 def user_select_multiple_dimensions(
@@ -49,7 +49,7 @@ def filter_command(args: Namespace):
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmpfile:
             output_path = Path(tmpfile.name)
 
-    dimensions_to_pages_map = pdf_tools.map_page_dimensions_to_pages(input_path)
+    dimensions_to_pages_map = pagewielder.map_page_dimensions_to_pages(input_path)
     selected_dimensions_set = user_select_multiple_dimensions(dimensions_to_pages_map)
 
     if selected_dimensions_set is None:
@@ -70,7 +70,7 @@ def filter_command(args: Namespace):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="PDF Tools")
+    parser = argparse.ArgumentParser(description="pagewielder")
     subparsers = parser.add_subparsers(help="Commands")
 
     filter_parser = subparsers.add_parser(

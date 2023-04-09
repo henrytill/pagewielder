@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "pdf-tools"
+name = "pagewielder"
 version = "0.1.0"
 description = ""
 authors = ["Henry Till <henrytill@gmail.com>"]
 readme = "README.md"
-packages = [{ include = "pdf_tools" }]
+packages = [{ include = "pagewielder" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -19,7 +19,7 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-pdf-tools = "pdf_tools.__main__:main"
+pagewielder = "pagewielder.__main__:main"
 
 [tool.black]
 line-length = 88
