@@ -43,6 +43,10 @@ def filter_command(args: Namespace) -> None:
         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmpfile:
             output_path = Path(tmpfile.name)
 
+    if input_path == output_path:
+        print('Input and output paths must be different.')
+        return
+
     with pikepdf.open(input_path) as input_pdf:
         dimensions_to_pages = pagewielder.map_page_dimensions_to_pages(input_pdf)
         maybe_selected_dimensions = user_select_multiple_dimensions(dimensions_to_pages)
