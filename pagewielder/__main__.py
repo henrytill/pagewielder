@@ -32,7 +32,7 @@ def user_select_multiple_dimensions(dimensions_to_pages: dict[Dimensions, Pages]
             print('Invalid input. Please enter valid indices separated by commas.\n')
 
 
-def filter_command(args: Namespace):
+def filter_command(args: Namespace) -> None:
     '''Filter a PDF file based on page dimensions.'''
     input_path: Path = args.input
     output_path: Optional[Path] = None
@@ -64,7 +64,7 @@ def filter_command(args: Namespace):
     print(f'Filtered PDF saved as \'{output_path}\'')
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description='pagewielder')
     subparsers = parser.add_subparsers(help='Commands')
 
