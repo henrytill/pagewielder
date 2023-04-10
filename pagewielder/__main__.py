@@ -10,9 +10,7 @@ import pagewielder
 from pagewielder import Dimensions, Pages
 
 
-def user_select_multiple_dimensions(
-    dimensions_to_pages_map: dict[Dimensions, Pages]
-) -> Optional[set[Dimensions]]:
+def user_select_multiple_dimensions(dimensions_to_pages_map: dict[Dimensions, Pages]) -> Optional[set[Dimensions]]:
     '''
     Prompt the user to one or more dimensions from a list of dimensions and the
     corresponding number of pages.
@@ -25,16 +23,12 @@ def user_select_multiple_dimensions(
         print(f'{i}: {width:.2f} x {height:.2f} ({num_pages} pages)')
 
     while True:
-        user_input = input(
-            'Select page sets to remove by index (comma-separated) or press Enter to cancel: '
-        )
+        user_input = input('Select page sets to remove by index (comma-separated) or press Enter to cancel: ')
         if not user_input:
             return None
         selected_dimensions = user_input.split(',')
         try:
-            selected_dimensions_set = {
-                dimensions_list[int(index)] for index in selected_dimensions
-            }
+            selected_dimensions_set = {dimensions_list[int(index)] for index in selected_dimensions}
             return selected_dimensions_set
         except (ValueError, IndexError):
             print('Invalid input. Please enter valid indices separated by commas.\n')
@@ -52,9 +46,7 @@ def filter_command(args: Namespace):
 
     with pikepdf.open(input_path) as input_pdf:
         dimensions_to_pages_map = pagewielder.map_page_dimensions_to_pages(input_pdf)
-        selected_dimensions_set = user_select_multiple_dimensions(
-            dimensions_to_pages_map
-        )
+        selected_dimensions_set = user_select_multiple_dimensions(dimensions_to_pages_map)
 
         if selected_dimensions_set is None:
             print('No page sets selected. No output file created.')
@@ -77,13 +69,9 @@ def main():
     parser = argparse.ArgumentParser(description='pagewielder')
     subparsers = parser.add_subparsers(help='Commands')
 
-    filter_parser = subparsers.add_parser(
-        'filter', help='Filter PDF pages based on dimensions'
-    )
+    filter_parser = subparsers.add_parser('filter', help='Filter PDF pages based on dimensions')
     filter_parser.add_argument('input', type=Path, help='Path to the input PDF file')
-    filter_parser.add_argument(
-        '-o', '--output', type=Path, help='Path to the output PDF file (optional)'
-    )
+    filter_parser.add_argument('-o', '--output', type=Path, help='Path to the output PDF file (optional)')
     filter_parser.set_defaults(func=filter_command)
 
     args = parser.parse_args()
