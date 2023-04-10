@@ -23,3 +23,4 @@ pagewielder = "pagewielder.__main__:main"
 
 [tool.black]
 line-length = 88
+skip-string-normalization = true
