@@ -10,16 +10,15 @@ import pagewielder
 from pagewielder import Dimensions, Pages
 
 
-def user_select_multiple_dimensions(dimensions_to_pages_map: dict[Dimensions, Pages]) -> Optional[set[Dimensions]]:
+def user_select_multiple_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> Optional[set[Dimensions]]:
     '''
-    Prompt the user to one or more dimensions from a list of dimensions and the
-    corresponding number of pages.
+    Prompt the user to one or more dimensions from a list of dimensions and the corresponding number of pages.
     '''
-    dimensions_list = list(dimensions_to_pages_map.keys())
+    dimensions_list = list(dimensions_to_pages.keys())
     print('Available dimensions (width x height) and number of pages:')
     for i, dimensions in enumerate(dimensions_list):
         width, height = dimensions
-        num_pages = len(dimensions_to_pages_map[dimensions])
+        num_pages = len(dimensions_to_pages[dimensions])
         print(f'{i}: {width:.2f} x {height:.2f} ({num_pages} pages)')
 
     while True:
@@ -28,33 +27,33 @@ def user_select_multiple_dimensions(dimensions_to_pages_map: dict[Dimensions, Pa
             return None
         selected_dimensions = user_input.split(',')
         try:
-            selected_dimensions_set = {dimensions_list[int(index)] for index in selected_dimensions}
-            return selected_dimensions_set
+            return {dimensions_list[int(index)] for index in selected_dimensions}
         except (ValueError, IndexError):
             print('Invalid input. Please enter valid indices separated by commas.\n')
 
 
 def filter_command(args: Namespace):
+    '''Filter a PDF file based on page dimensions.'''
     input_path: Path = args.input
-    output_path: Path
+    output_path: Optional[Path] = None
 
-    if args.output:
+    if args.output is not None:
         output_path = args.output
     else:
         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmpfile:
             output_path = Path(tmpfile.name)
 
     with pikepdf.open(input_path) as input_pdf:
-        dimensions_to_pages_map = pagewielder.map_page_dimensions_to_pages(input_pdf)
-        selected_dimensions_set = user_select_multiple_dimensions(dimensions_to_pages_map)
+        dimensions_to_pages = pagewielder.map_page_dimensions_to_pages(input_pdf)
+        maybe_selected_dimensions = user_select_multiple_dimensions(dimensions_to_pages)
 
-        if selected_dimensions_set is None:
+        if maybe_selected_dimensions is None:
             print('No page sets selected. No output file created.')
             return
 
         selected_pages: Pages = set()
-        for dimensions in selected_dimensions_set:
-            selected_pages.update(dimensions_to_pages_map[dimensions])
+        for page_dimensions in maybe_selected_dimensions:
+            selected_pages.update(dimensions_to_pages[page_dimensions])
 
         with pikepdf.Pdf.new() as output_pdf:
             for i, page in enumerate(input_pdf.pages, start=1):
