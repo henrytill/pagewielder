@@ -42,29 +42,33 @@ def user_select_multiple_dimensions(
 
 def filter_command(args: Namespace):
     input_path: Path = args.input
+    output_path: Path
 
     if args.output:
-        output_path: Path = args.output
+        output_path = args.output
     else:
         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmpfile:
             output_path = Path(tmpfile.name)
 
-    dimensions_to_pages_map = pagewielder.map_page_dimensions_to_pages(input_path)
-    selected_dimensions_set = user_select_multiple_dimensions(dimensions_to_pages_map)
+    with pikepdf.open(input_path) as input_pdf:
+        dimensions_to_pages_map = pagewielder.map_page_dimensions_to_pages(input_pdf)
+        selected_dimensions_set = user_select_multiple_dimensions(
+            dimensions_to_pages_map
+        )
 
-    if selected_dimensions_set is None:
-        print('No page sets selected. No output file created.')
-        return
+        if selected_dimensions_set is None:
+            print('No page sets selected. No output file created.')
+            return
 
-    selected_pages: Pages = set()
-    for dimensions in selected_dimensions_set:
-        selected_pages.update(dimensions_to_pages_map[dimensions])
+        selected_pages: Pages = set()
+        for dimensions in selected_dimensions_set:
+            selected_pages.update(dimensions_to_pages_map[dimensions])
 
-    with pikepdf.open(input_path) as input_pdf, pikepdf.Pdf.new() as output_pdf:
-        for i, page in enumerate(input_pdf.pages, start=1):
-            if i not in selected_pages:
-                output_pdf.pages.append(page)
-        output_pdf.save(output_path)
+        with pikepdf.Pdf.new() as output_pdf:
+            for i, page in enumerate(input_pdf.pages, start=1):
+                if i not in selected_pages:
+                    output_pdf.pages.append(page)
+            output_pdf.save(output_path)
 
     print(f'Filtered PDF saved as \'{output_path}\'')
 
