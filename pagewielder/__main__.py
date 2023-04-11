@@ -65,7 +65,7 @@ def filter_command(args: Namespace) -> None:
                     output_pdf.pages.append(page)
             output_pdf.save(output_path)
 
-    print(f'Filtered PDF saved as \'{output_path}\'')
+    print(f'Filtered PDF saved as {output_path}')
 
 
 def main() -> None:
