@@ -11,9 +11,9 @@ from pagewielder import Dimensions, Pages
 
 
 def user_select_multiple_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> Optional[set[Dimensions]]:
-    '''
+    """
     Prompt the user to one or more dimensions from a list of dimensions and the corresponding number of pages.
-    '''
+    """
     dimensions_list = list(dimensions_to_pages.keys())
     print('Available dimensions (width x height) and number of pages:')
     for i, dimensions in enumerate(dimensions_list):
@@ -33,7 +33,7 @@ def user_select_multiple_dimensions(dimensions_to_pages: dict[Dimensions, Pages]
 
 
 def filter_command(args: Namespace) -> None:
-    '''Filter a PDF file based on page dimensions.'''
+    """Filter a PDF file based on page dimensions."""
     input_path: Path = args.input
     output_path: Optional[Path] = None
 
