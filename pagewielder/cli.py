@@ -7,8 +7,8 @@ from typing import Optional
 
 import pikepdf
 
-from pagewielder import Dimensions, Pages
-import pagewielder
+from .core import Dimensions, Pages
+from . import core
 
 
 # pylint: disable=too-few-public-methods
@@ -71,7 +71,7 @@ def filter_command(args: Namespace) -> None:
         return
 
     with pikepdf.open(input_path) as input_pdf:
-        dimensions_to_pages = pagewielder.map_dimensions_to_pages(input_pdf)
+        dimensions_to_pages = core.map_dimensions_to_pages(input_pdf)
         maybe_selected_dimensions = select_dimensions(dimensions_to_pages)
 
         if maybe_selected_dimensions is None:
