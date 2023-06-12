@@ -1,8 +1,7 @@
-from .core import Dimensions, Pages, map_page_dimensions_to_pages, get_page_dimensions
+from .core import Dimensions, Pages, map_dimensions_to_pages
 
 __all__ = [
     'Dimensions',
     'Pages',
-    'map_page_dimensions_to_pages',
-    'get_page_dimensions',
+    'map_dimensions_to_pages',
 ]

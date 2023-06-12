@@ -10,30 +10,49 @@ from pagewielder import Dimensions, Pages
 import pagewielder
 
 
-def user_select_multiple_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> Optional[set[Dimensions]]:
-    """
-    Prompt the user to one or more dimensions from a list of dimensions and the corresponding number of pages.
+class Prompt:
+    AVAILABLE_DIMENSIONS = 'Available dimensions (width x height) and number of pages:'
+    SELECT_DIMENSIONS = 'Select page sets to remove by index (comma-separated) or press Enter to cancel: '
+    INVALID_INPUT = 'Invalid input. Please enter valid indices separated by commas.\n'
+
+
+def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> Optional[set[Dimensions]]:
+    """Prompt the user to one or more dimensions from a list of dimensions and
+    the corresponding number of pages.
+
+    Args:
+        dimensions_to_pages: A dictionary mapping dimensions to the set of
+            pages with those dimensions.
+
+    Returns:
+        A set of dimensions to remove or None if the user cancels.
     """
     dimensions_list = list(dimensions_to_pages.keys())
-    print('Available dimensions (width x height) and number of pages:')
+
+    print(Prompt.AVAILABLE_DIMENSIONS)
+
     for i, dimensions in enumerate(dimensions_list):
         width, height = dimensions
         num_pages = len(dimensions_to_pages[dimensions])
         print(f'{i}: {width:.2f} x {height:.2f} ({num_pages} pages)')
 
     while True:
-        user_input = input('Select page sets to remove by index (comma-separated) or press Enter to cancel: ')
+        user_input = input(Prompt.SELECT_DIMENSIONS)
         if not user_input:
             return None
         selected_dimensions = user_input.split(',')
         try:
             return {dimensions_list[int(index)] for index in selected_dimensions}
         except (ValueError, IndexError):
-            print('Invalid input. Please enter valid indices separated by commas.\n')
+            print(Prompt.INVALID_INPUT)
 
 
 def filter_command(args: Namespace) -> None:
-    """Filter a PDF file based on page dimensions."""
+    """Filter a PDF file based on page dimensions.
+
+    Args:
+        args: Command-line arguments.
+    """
     input_path: Path = args.input
     output_path: Optional[Path] = None
 
@@ -48,8 +67,8 @@ def filter_command(args: Namespace) -> None:
         return
 
     with pikepdf.open(input_path) as input_pdf:
-        dimensions_to_pages = pagewielder.map_page_dimensions_to_pages(input_pdf)
-        maybe_selected_dimensions = user_select_multiple_dimensions(dimensions_to_pages)
+        dimensions_to_pages = pagewielder.map_dimensions_to_pages(input_pdf)
+        maybe_selected_dimensions = select_dimensions(dimensions_to_pages)
 
         if maybe_selected_dimensions is None:
             print('No page sets selected. No output file created.')
