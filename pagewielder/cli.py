@@ -1,3 +1,4 @@
+"""Command-line interface for pagewielder."""
 import argparse
 import tempfile
 from argparse import Namespace
@@ -10,7 +11,10 @@ from pagewielder import Dimensions, Pages
 import pagewielder
 
 
+# pylint: disable=too-few-public-methods
 class Prompt:
+    """Prompt strings used in the command-line interface."""
+
     AVAILABLE_DIMENSIONS = 'Available dimensions (width x height) and number of pages:'
     SELECT_DIMENSIONS = 'Select page sets to remove by index (comma-separated) or press Enter to cancel: '
     INVALID_INPUT = 'Invalid input. Please enter valid indices separated by commas.\n'
@@ -88,6 +92,7 @@ def filter_command(args: Namespace) -> None:
 
 
 def main() -> None:
+    """Main entry point for the command-line interface."""
     parser = argparse.ArgumentParser(description='pagewielder')
     subparsers = parser.add_subparsers(help='Commands')
 

@@ -1,3 +1,4 @@
+"""Core functionality for pagewielder."""
 import collections
 
 from pikepdf import Page, Rectangle, Pdf
