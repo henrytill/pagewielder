@@ -20,7 +20,11 @@
 	"customizations": {
 		"vscode": {
 			"extensions": [
-				"tamasfe.even-better-toml"
+				"tamasfe.even-better-toml",
+				"ms-python.pylint",
+				"ms-python.black-formatter",
+				"ms-python.isort",
+				"esbenp.prettier-vscode"
 			]
 		}
 	},
