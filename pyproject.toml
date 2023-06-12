@@ -7,12 +7,13 @@ readme = "README.md"
 packages = [{ include = "pagewielder" }]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.9"
 pikepdf = "^7.1.2"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "^6.0.0"
 black = "^23.3.0"
+pylint = "^2.17"
 
 [build-system]
 requires = ["poetry-core"]
@@ -28,3 +29,9 @@ skip-string-normalization = true
 [tool.isort]
 profile = "black"
 known_first_party = ["pagewielder"]
+
+[tool.pylint]
+max-line-length = 120
+disable = [
+    "C0414", # useless-import-alias, we use aliases for type checking
+]
