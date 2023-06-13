@@ -1,5 +1,6 @@
 {
   "python.analysis.typeCheckingMode": "strict",
   "python.terminal.activateEnvironment": false,
-  "pylint.importStrategy": "fromEnvironment"
+  "pylint.importStrategy": "fromEnvironment",
+  "makefile.makefilePath": "GNUmakefile"
 }
