@@ -1,25 +1,20 @@
-[tool.poetry]
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[project]
 name = "pagewielder"
 version = "0.1.0"
-description = ""
-authors = ["Henry Till <henrytill@gmail.com>"]
+description = "A tool for manipulating PDFs."
 readme = "README.md"
-packages = [{ include = "pagewielder" }]
+authors = [{ name = "Henry Till", email = "henrytill@gmail.com" }]
+requires-python = ">=3.9"
+dependencies = ["pikepdf>=7.1.2"]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-pikepdf = "^7.1.2"
+[project.optional-dependencies]
+dev = ["flake8>=6.0.0", "black>=23.3.0", "pylint>=2.17"]
 
-[tool.poetry.group.dev.dependencies]
-flake8 = "^6.0.0"
-black = "^23.3.0"
-pylint = "^2.17"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.scripts]
+[project.scripts]
 pagewielder = "pagewielder.__main__:main"
 
 [tool.black]
