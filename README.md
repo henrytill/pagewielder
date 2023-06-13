@@ -1,5 +1,5 @@
 # pagewielder
 
-[![Python application](https://github.com/henrytill/pagewielder/actions/workflows/python-app.yml/badge.svg)](https://github.com/henrytill/pagewielder/actions/workflows/python-app.yml)
+[![Test](https://github.com/henrytill/pagewielder/actions/workflows/main.yml/badge.svg)](https://github.com/henrytill/pagewielder/actions/workflows/main.yml)
 
 A tool for manipulating PDFs.
