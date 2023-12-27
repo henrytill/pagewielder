@@ -34,7 +34,7 @@ warn_redundant_casts = false
 [tool.isort]
 profile = "black"
 known_first_party = ["pagewielder"]
-line-length = 120
+line_length = 120
 
 [tool.pylint]
 max-line-length = 120

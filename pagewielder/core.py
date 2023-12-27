@@ -1,7 +1,7 @@
 """Core functionality for pagewielder."""
 import collections
 
-from pikepdf import Page, Rectangle, Pdf
+from pikepdf import Page, Pdf, Rectangle
 
 Dimensions = tuple[float, float]
 Pages = set[int]

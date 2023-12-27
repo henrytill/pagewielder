@@ -7,8 +7,8 @@ from typing import Optional
 
 import pikepdf
 
-from .core import Dimensions, Pages
 from . import core
+from .core import Dimensions, Pages
 
 
 # pylint: disable=too-few-public-methods
