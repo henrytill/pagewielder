@@ -15,9 +15,9 @@ from . import core
 class Prompt:
     """Prompt strings used in the command-line interface."""
 
-    AVAILABLE_DIMENSIONS = 'Available dimensions (width x height) and number of pages:'
-    SELECT_DIMENSIONS = 'Select page sets to remove by index (comma-separated) or press Enter to cancel: '
-    INVALID_INPUT = 'Invalid input. Please enter valid indices separated by commas.\n'
+    AVAILABLE_DIMENSIONS = "Available dimensions (width x height) and number of pages:"
+    SELECT_DIMENSIONS = "Select page sets to remove by index (comma-separated) or press Enter to cancel: "
+    INVALID_INPUT = "Invalid input. Please enter valid indices separated by commas.\n"
 
 
 def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> Optional[set[Dimensions]]:
@@ -38,13 +38,13 @@ def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> Optional[
     for i, dimensions in enumerate(dimensions_list):
         width, height = dimensions
         num_pages = len(dimensions_to_pages[dimensions])
-        print(f'{i}: {width:.2f} x {height:.2f} ({num_pages} pages)')
+        print(f"{i}: {width:.2f} x {height:.2f} ({num_pages} pages)")
 
     while True:
         user_input = input(Prompt.SELECT_DIMENSIONS)
         if not user_input:
             return None
-        selected_dimensions = user_input.split(',')
+        selected_dimensions = user_input.split(",")
         try:
             return {dimensions_list[int(index)] for index in selected_dimensions}
         except (ValueError, IndexError):
@@ -63,11 +63,11 @@ def filter_command(args: Namespace) -> None:
     if args.output is not None:
         output_path = args.output
     else:
-        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmpfile:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmpfile:
             output_path = Path(tmpfile.name)
 
     if input_path == output_path:
-        print('Input and output paths must be different.')
+        print("Input and output paths must be different.")
         return
 
     with pikepdf.open(input_path) as input_pdf:
@@ -75,7 +75,7 @@ def filter_command(args: Namespace) -> None:
         maybe_selected_dimensions = select_dimensions(dimensions_to_pages)
 
         if maybe_selected_dimensions is None:
-            print('No page sets selected. No output file created.')
+            print("No page sets selected. No output file created.")
             return
 
         selected_pages: Pages = set()
@@ -88,7 +88,7 @@ def filter_command(args: Namespace) -> None:
                     output_pdf.pages.append(page)
             output_pdf.save(output_path)
 
-    print(f'Filtered PDF saved as {output_path}')
+    print(f"Filtered PDF saved as {output_path}")
 
 
 def main() -> int:
@@ -97,17 +97,17 @@ def main() -> int:
     Returns:
         An exit code.
     """
-    parser = argparse.ArgumentParser(description='pagewielder')
-    subparsers = parser.add_subparsers(help='Commands')
+    parser = argparse.ArgumentParser(description="pagewielder")
+    subparsers = parser.add_subparsers(help="Commands")
 
-    filter_parser = subparsers.add_parser('filter', help='Filter PDF pages based on dimensions')
-    filter_parser.add_argument('input', type=Path, help='Path to the input PDF file')
-    filter_parser.add_argument('-o', '--output', type=Path, help='Path to the output PDF file (optional)')
+    filter_parser = subparsers.add_parser("filter", help="Filter PDF pages based on dimensions")
+    filter_parser.add_argument("input", type=Path, help="Path to the input PDF file")
+    filter_parser.add_argument("-o", "--output", type=Path, help="Path to the output PDF file (optional)")
     filter_parser.set_defaults(func=filter_command)
 
     args = parser.parse_args()
 
-    if not hasattr(args, 'func'):
+    if not hasattr(args, "func"):
         parser.print_help()
         return 2
 

@@ -25,7 +25,6 @@ pagewielder = "pagewielder.__main__:main"
 
 [tool.black]
 line-length = 120
-skip-string-normalization = true
 
 [tool.mypy]
 strict = true
