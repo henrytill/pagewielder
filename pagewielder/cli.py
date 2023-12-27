@@ -2,6 +2,7 @@
 import argparse
 import tempfile
 from argparse import Namespace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +13,7 @@ from .core import Dimensions, Pages
 
 
 # pylint: disable=too-few-public-methods
+@dataclass(frozen=True)
 class Prompt:
     """Prompt strings used in the command-line interface."""
 
