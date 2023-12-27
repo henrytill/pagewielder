@@ -91,8 +91,12 @@ def filter_command(args: Namespace) -> None:
     print(f'Filtered PDF saved as {output_path}')
 
 
-def main() -> None:
-    """Main entry point for the command-line interface."""
+def main() -> int:
+    """The main entry point for the command-line interface.
+
+    Returns:
+        An exit code.
+    """
     parser = argparse.ArgumentParser(description='pagewielder')
     subparsers = parser.add_subparsers(help='Commands')
 
@@ -102,7 +106,11 @@ def main() -> None:
     filter_parser.set_defaults(func=filter_command)
 
     args = parser.parse_args()
-    if hasattr(args, 'func'):
-        args.func(args)
-    else:
+
+    if not hasattr(args, 'func'):
         parser.print_help()
+        return 2
+
+    ret: int = args.func(args)
+
+    return ret
