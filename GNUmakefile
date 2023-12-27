@@ -11,7 +11,7 @@ VENV_ACTIVATE = $(VENV)/bin/activate
 -include config.mk
 
 .PHONY: all
-all: lint
+all: check lint
 
 $(VENV_TARGET): pyproject.toml
 	python3 -m venv $(VENV)
@@ -22,6 +22,11 @@ $(VENV_TARGET): pyproject.toml
 
 .PHONY: venv
 venv: $(VENV_TARGET)
+
+.PHONY: check
+check: $(VENV_TARGET)
+	source $(VENV_ACTIVATE)
+	mypy pagewielder
 
 .PHONY: lint
 lint: $(VENV_TARGET)
