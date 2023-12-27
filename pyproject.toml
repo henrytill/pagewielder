@@ -12,7 +12,13 @@ requires-python = ">=3.9"
 dependencies = ["pikepdf>=7.1.2"]
 
 [project.optional-dependencies]
-dev = ["flake8>=6.0.0", "black>=23.3.0", "pylint>=2.17"]
+dev = [
+    "black>=23.3.0",
+    "flake8>=6.0.0",
+    "isort>=5.13.2",
+    "mypy>=1.8.0",
+    "pylint>=2.17",
+]
 
 [project.scripts]
 pagewielder = "pagewielder.__main__:main"
@@ -21,12 +27,22 @@ pagewielder = "pagewielder.__main__:main"
 line-length = 120
 skip-string-normalization = true
 
+[tool.mypy]
+strict = true
+check_untyped_defs = true
+warn_redundant_casts = false
+
 [tool.isort]
 profile = "black"
 known_first_party = ["pagewielder"]
+line-length = 120
 
 [tool.pylint]
 max-line-length = 120
 disable = [
+    "C0301", # line-too-long, we use black for formatting
     "C0414", # useless-import-alias, we use aliases for type checking
 ]
+
+[tool.pyright]
+strict = true
