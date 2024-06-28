@@ -22,9 +22,6 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-      - name: Install project dependencies
-        run: |
-          make venv
-      - name: lint
-        run: |
-          make lint
+      - run: ./build.sh -e create-env
+      - run: ./build.sh -e check
+      - run: ./build.sh -e lint
