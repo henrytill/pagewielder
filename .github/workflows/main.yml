@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  linux:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,3 +25,10 @@ jobs:
       - run: ./build.sh -e create-env
       - run: ./build.sh -e check
       - run: ./build.sh -e lint
+  linux-flake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - run: nix build -L
