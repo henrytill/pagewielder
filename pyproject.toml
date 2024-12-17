@@ -17,6 +17,9 @@ dev = ["black>=23.3.0", "flake8>=6.0.0", "isort>=5.13.2", "mypy>=1.8.0", "pylint
 [project.scripts]
 pagewielder = "pagewielder.__main__:main"
 
+[tool.setuptools]
+packages = ["pagewielder"]
+
 [tool.setuptools.dynamic]
 version = { attr = "pagewielder.version.__version__" }
 
