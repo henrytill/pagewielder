@@ -1,4 +1,5 @@
 """Command-line interface for pagewielder."""
+
 import argparse
 import tempfile
 from argparse import Namespace
