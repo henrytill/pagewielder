@@ -28,7 +28,7 @@
           nativeCheckInputs = with pkgs.python3Packages; [ mypy ];
           src = builtins.path {
             path = ./.;
-            name = "pagewielder-py-src";
+            name = "pagewielder-src";
           };
           preConfigure = "./build.sh generate -g ${self.shortRev or self.dirtyShortRev}";
           patchPhase = "patchShebangs build.sh";
