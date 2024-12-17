@@ -16,6 +16,7 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
+      - run: ./build.sh generate
       - run: ./build.sh -e create-env
       - run: ./build.sh -e check
       - run: ./build.sh -e lint

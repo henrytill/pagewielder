@@ -5,3 +5,4 @@ __pycache__/
 *.pdf
 config.mk
 /result*
+/pagewielder/version.py

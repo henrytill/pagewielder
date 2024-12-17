@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pagewielder"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A tool for manipulating PDFs."
 readme = "README.md"
 authors = [{ name = "Henry Till", email = "henrytill@gmail.com" }]
@@ -22,6 +22,9 @@ dev = [
 
 [project.scripts]
 pagewielder = "pagewielder.__main__:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "pagewielder.version.__version__" }
 
 [tool.black]
 line-length = 120

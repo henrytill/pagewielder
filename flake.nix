@@ -30,6 +30,7 @@
             path = ./.;
             name = "pagewielder-py-src";
           };
+          preConfigure = "./build.sh generate -g ${self.shortRev or self.dirtyShortRev}";
           patchPhase = "patchShebangs build.sh";
           checkPhase = "./build.sh check";
         };
