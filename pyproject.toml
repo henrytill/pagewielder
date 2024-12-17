@@ -44,4 +44,4 @@ disable = [
 ]
 
 [tool.pyright]
-strict = true
+strict = ["pagewielder", "tests"]
