@@ -1,11 +1,12 @@
 """Command-line interface for pagewielder."""
 
 import argparse
+import sys
 import tempfile
 from argparse import Namespace
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import pikepdf
 
@@ -94,7 +95,7 @@ def filter_command(args: Namespace) -> None:
     print(f"Filtered PDF saved as {output_path}")
 
 
-def main() -> int:
+def main(args: Sequence[str] = sys.argv[1:]) -> int:
     """The main entry point for the command-line interface.
 
     Returns:
@@ -109,12 +110,17 @@ def main() -> int:
     filter_parser.add_argument("-o", "--output", type=Path, help="Path to the output PDF file (optional)")
     filter_parser.set_defaults(func=filter_command)
 
-    args = parser.parse_args()
+    parsed = parser.parse_args(args)
 
-    if not hasattr(args, "func"):
+    if not hasattr(parsed, "func"):
         parser.print_help()
         return 2
 
-    ret: int = args.func(args)
+    if not callable(parsed.func):
+        raise TypeError("Expected callable")
+
+    ret = parsed.func(parsed)
+    if not isinstance(ret, int):
+        raise TypeError("Expected int")
 
     return ret
