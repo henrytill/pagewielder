@@ -30,8 +30,8 @@
             path = ./.;
             name = "pagewielder-src";
           };
-          preConfigure = "./build.sh generate -g ${self.shortRev or self.dirtyShortRev}";
           patchPhase = "patchShebangs build.sh";
+          preConfigure = "./build.sh generate -g ${self.shortRev or self.dirtyShortRev}";
           checkPhase = "./build.sh check";
         };
     in
