@@ -55,11 +55,14 @@ def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> Optional[
             print(Prompt.INVALID_INPUT)
 
 
-def filter_command(args: Namespace) -> None:
+def filter_command(args: Namespace) -> int:
     """Filter a PDF file based on page dimensions.
 
     Args:
         args: Command-line arguments.
+
+    Returns:
+        An exit code.
     """
     input_path: Path = args.input
     output_path: Optional[Path] = None
@@ -71,16 +74,16 @@ def filter_command(args: Namespace) -> None:
             output_path = Path(tmpfile.name)
 
     if input_path == output_path:
-        print("Input and output paths must be different.")
-        return
+        print("Input and output paths must be different.", file=sys.stderr)
+        return 1
 
     with pikepdf.open(input_path) as input_pdf:
         dimensions_to_pages = core.map_dimensions_to_pages(input_pdf)
         maybe_selected_dimensions = select_dimensions(dimensions_to_pages)
 
         if maybe_selected_dimensions is None:
-            print("No page sets selected. No output file created.")
-            return
+            print("No page sets selected. No output file created.", file=sys.stderr)
+            return 1
 
         selected_pages: Pages = set()
         for page_dimensions in maybe_selected_dimensions:
@@ -93,6 +96,8 @@ def filter_command(args: Namespace) -> None:
             output_pdf.save(output_path)
 
     print(f"Filtered PDF saved as {output_path}")
+
+    return 0
 
 
 def main(args: Sequence[str] = sys.argv[1:]) -> int:
