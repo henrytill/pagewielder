@@ -1,5 +1,5 @@
 # pagewielder
 
-[![Test](https://github.com/henrytill/pagewielder/actions/workflows/main.yml/badge.svg)](https://github.com/henrytill/pagewielder/actions/workflows/main.yml)
+[![CI](https://github.com/henrytill/pagewielder/actions/workflows/ci.yml/badge.svg)](https://github.com/henrytill/pagewielder/actions/workflows/ci.yml)
 
 A tool for manipulating PDFs.
