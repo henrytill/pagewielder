@@ -24,6 +24,53 @@ class Prompt:
     INVALID_INPUT = "Invalid input. Please enter valid indices separated by commas.\n"
 
 
+def parse_page_range(page_range: str, total_pages: int) -> tuple[int, int]:
+    """Parse a page range string and return start and end page numbers.
+
+    Args:
+        page_range: A string representing a page range (e.g., "1:5", "3:", ":10")
+        total_pages: The total number of pages in the document
+
+    Returns:
+        A tuple of (start_page, end_page) using 1-based indexing
+
+    Raises:
+        ValueError: If the page range is invalid
+    """
+    parts = page_range.split(":", 1)
+
+    if len(parts) == 1:
+        # Single page
+        try:
+            page = int(parts[0])
+            if page < 1 or page > total_pages:
+                raise ValueError(f"Page {page} is out of range (1-{total_pages})")
+            return (page, page)
+        except ValueError as e:
+            if "out of range" in str(e):
+                raise
+            raise ValueError(f"Invalid page number: {parts[0]}") from e
+
+    if len(parts) == 2:
+        # Range
+        start_str, end_str = parts
+
+        # Default values
+        start = 1 if not start_str else int(start_str)
+        end = total_pages if not end_str else int(end_str)
+
+        if start < 1:
+            raise ValueError(f"Start page {start} must be >= 1")
+        if end > total_pages:
+            raise ValueError(f"End page {end} exceeds total pages ({total_pages})")
+        if start > end:
+            raise ValueError(f"Start page {start} must be <= end page {end}")
+
+        return (start, end)
+
+    raise ValueError(f"Invalid page range format: {page_range}")
+
+
 def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> Optional[set[Dimensions]]:
     """Prompt the user to one or more dimensions from a list of dimensions and
     the corresponding number of pages.
@@ -100,6 +147,49 @@ def filter_command(args: Namespace) -> int:
     return 0
 
 
+def excerpt_command(args: Namespace) -> int:
+    """Extract a range of pages from a PDF file.
+
+    Args:
+        args: Command-line arguments.
+
+    Returns:
+        An exit code.
+    """
+    input_path: Path = args.input
+    output_path: Optional[Path] = None
+
+    if args.output is not None:
+        output_path = args.output
+    else:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmpfile:
+            output_path = Path(tmpfile.name)
+
+    if input_path == output_path:
+        print("Input and output paths must be different.", file=sys.stderr)
+        return 1
+
+    with pikepdf.open(input_path) as input_pdf:
+        total_pages = len(input_pdf.pages)
+
+        try:
+            start_page, end_page = parse_page_range(args.pages, total_pages)
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+
+        with pikepdf.Pdf.new() as output_pdf:
+            # pikepdf uses 0-based indexing internally
+            for i in range(start_page - 1, end_page):
+                output_pdf.pages.append(input_pdf.pages[i])
+            output_pdf.save(output_path)
+
+    page_count = end_page - start_page + 1
+    print(f"Extracted {page_count} page{'s' if page_count != 1 else ''} ({start_page}:{end_page}) to {output_path}")
+
+    return 0
+
+
 def main(args: Sequence[str] = sys.argv[1:]) -> int:
     """The main entry point for the command-line interface.
 
@@ -114,6 +204,12 @@ def main(args: Sequence[str] = sys.argv[1:]) -> int:
     filter_parser.add_argument("input", type=Path, help="Path to the input PDF file")
     filter_parser.add_argument("-o", "--output", type=Path, help="Path to the output PDF file (optional)")
     filter_parser.set_defaults(func=filter_command)
+
+    excerpt_parser = subparsers.add_parser("excerpt", help="Extract a range of pages from a PDF")
+    excerpt_parser.add_argument("input", type=Path, help="Path to the input PDF file")
+    excerpt_parser.add_argument("pages", help="Page range to extract (e.g., 1:5, 3:, :10, 7)")
+    excerpt_parser.add_argument("-o", "--output", type=Path, help="Path to the output PDF file (optional)")
+    excerpt_parser.set_defaults(func=excerpt_command)
 
     parsed = parser.parse_args(args)
 
