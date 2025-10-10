@@ -30,9 +30,9 @@
             path = ./.;
             name = "pagewielder-src";
           };
-          patchPhase = "patchShebangs build.sh";
-          preConfigure = "./build.sh generate -g ${self.shortRev or self.dirtyShortRev}";
-          checkPhase = "./build.sh check";
+          patchPhase = "patchShebangs run.py";
+          preConfigure = "./run.py generate -g ${self.shortRev or self.dirtyShortRev}";
+          checkPhase = "./run.py check";
         };
     in
     flake-utils.lib.eachDefaultSystem (
