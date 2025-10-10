@@ -23,7 +23,7 @@
         pkgs.python3Packages.buildPythonApplication {
           name = "pagewielder";
           pyproject = true;
-          build-system = with pkgs.python3Packages; [ setuptools ];
+          build-system = with pkgs.python3Packages; [ flit-core ];
           dependencies = with pkgs.python3Packages; [ pikepdf ];
           nativeCheckInputs = with pkgs.python3Packages; [ mypy ];
           src = builtins.path {

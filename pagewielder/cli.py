@@ -10,7 +10,7 @@ from typing import Optional, Sequence
 
 import pikepdf
 
-from . import core, version
+from . import __version__, core
 from .core import Dimensions, Pages
 
 
@@ -197,7 +197,7 @@ def main(args: Sequence[str] = sys.argv[1:]) -> int:
         An exit code.
     """
     parser = argparse.ArgumentParser(description="pagewielder")
-    parser.add_argument("--version", action="version", version=f"%(prog)s {version.__version__}")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(help="Commands")
 
     filter_parser = subparsers.add_parser("filter", help="Filter PDF pages based on dimensions")

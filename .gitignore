@@ -4,4 +4,4 @@ __pycache__/
 *.egg-info/
 *.pdf
 /result*
-/pagewielder/version.py
+/pagewielder/__init__.py

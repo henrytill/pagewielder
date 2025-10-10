@@ -68,9 +68,9 @@ def generate_version(git_ref: Optional[str] = None):
 
     logger.info(f"Generated version: {version}")
 
-    version_file = Path(PACKAGE_NAME) / "version.py"
-    version_file.write_text(
-        f'''"""This module contains version information."""
+    init_file = Path(PACKAGE_NAME) / "__init__.py"
+    init_file.write_text(
+        f'''"""A tool for manipulating PDFs."""
 
 # This file is auto-generated, do not edit by hand
 __version__ = "{version}"
