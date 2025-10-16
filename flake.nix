@@ -18,10 +18,14 @@
       ...
     }:
     let
+      baseVersion = nixpkgs.lib.trim (builtins.readFile ./VERSION);
+      gitRef = self.shortRev or self.dirtyShortRev;
+      version = "${baseVersion}+${gitRef}";
       makePagewielder =
         pkgs:
         pkgs.python3Packages.buildPythonApplication {
-          name = "pagewielder";
+          pname = "pagewielder";
+          inherit version;
           pyproject = true;
           build-system = with pkgs.python3Packages; [ flit-core ];
           dependencies = with pkgs.python3Packages; [ pikepdf ];
@@ -31,7 +35,7 @@
             name = "pagewielder-src";
           };
           patchPhase = "patchShebangs run.py";
-          preConfigure = "./run.py generate -g ${self.shortRev or self.dirtyShortRev}";
+          preConfigure = "./run.py generate -g ${gitRef}";
           checkPhase = "./run.py check";
         };
     in
