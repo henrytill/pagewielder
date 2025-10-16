@@ -1,5 +1,5 @@
 {
-  description = "A password manager";
+  description = "A tool for manipulating PDFs";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
