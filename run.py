@@ -37,7 +37,7 @@ def get_python(use_venv: bool) -> str:
     return sys.executable
 
 
-def run_command(cmd: list[str], use_venv: bool = False):
+def run(cmd: list[str], use_venv: bool = False):
     python = get_python(use_venv)
     if cmd[0] in ("python3", "python"):
         cmd[0] = python
@@ -47,7 +47,7 @@ def run_command(cmd: list[str], use_venv: bool = False):
         sys.exit(result.returncode)
 
 
-def generate_version(git_ref: Optional[str] = None):
+def generate(git_ref: Optional[str] = None):
     version_file = Path(VERSION_FILE)
     if not version_file.exists():
         logger.error(f"Version file {VERSION_FILE} not found")
@@ -93,20 +93,20 @@ def create_env():
         sys.exit(1)
 
     logger.info("Creating new virtual environment...")
-    generate_version()
+    generate()
     venv.create(venv_path, with_pip=True)
 
     python = get_python(True)
     logger.info(f"Using Python: {python}")
 
-    run_command([python, "-m", "pip", "install", "--upgrade", "pip"], use_venv=True)
-    run_command([python, "-m", "pip", "install", "-e", ".[types,test,dev]"], use_venv=True)
+    run([python, "-m", "pip", "install", "--upgrade", "pip"], use_venv=True)
+    run([python, "-m", "pip", "install", "-e", ".[types,test,dev]"], use_venv=True)
     logger.info("Environment created successfully")
 
 
 def check(use_venv: bool):
     logger.info("Running type checks...")
-    run_command(
+    run(
         ["python3", "-m", "mypy", "--no-color-output", PACKAGE_NAME, TEST_DIR],
         use_venv=use_venv,
     )
@@ -114,19 +114,19 @@ def check(use_venv: bool):
 
 def lint(use_venv: bool):
     logger.info("Running linters...")
-    run_command(["python3", "-m", "flake8", "--config", ".flake8"], use_venv=use_venv)
-    run_command(["python3", "-m", "pylint", PACKAGE_NAME, TEST_DIR], use_venv=use_venv)
+    run(["python3", "-m", "flake8", "--config", ".flake8"], use_venv=use_venv)
+    run(["python3", "-m", "pylint", PACKAGE_NAME, TEST_DIR], use_venv=use_venv)
 
 
-def format_code(use_venv: bool):
+def fmt(use_venv: bool):
     logger.info("Formatting code...")
-    run_command(["python3", "-m", "isort", PACKAGE_NAME, TEST_DIR], use_venv=use_venv)
-    run_command(["python3", "-m", "black", PACKAGE_NAME, TEST_DIR], use_venv=use_venv)
+    run(["python3", "-m", "isort", PACKAGE_NAME, TEST_DIR], use_venv=use_venv)
+    run(["python3", "-m", "black", PACKAGE_NAME, TEST_DIR], use_venv=use_venv)
 
 
 def test(use_venv: bool):
     logger.info("Running tests...")
-    run_command(
+    run(
         ["python3", "-m", "unittest", "discover", "-v", "-s", TEST_DIR],
         use_venv=use_venv,
     )
@@ -159,7 +159,7 @@ def main():
 
     match command:
         case CommandType.GENERATE:
-            generate_version(args.git_ref)
+            generate(args.git_ref)
         case CommandType.CREATE_ENV:
             create_env()
         case CommandType.CHECK:
@@ -167,7 +167,7 @@ def main():
         case CommandType.LINT:
             lint(args.venv)
         case CommandType.FMT:
-            format_code(args.venv)
+            fmt(args.venv)
         case CommandType.TEST:
             test(args.venv)
 
