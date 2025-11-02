@@ -30,10 +30,7 @@
           build-system = with pkgs.python3Packages; [ flit-core ];
           dependencies = with pkgs.python3Packages; [ pikepdf ];
           nativeCheckInputs = with pkgs.python3Packages; [ mypy ];
-          src = builtins.path {
-            path = ./.;
-            name = "pagewielder-src";
-          };
+          src = self;
           patchPhase = "patchShebangs run.py";
           preConfigure = "./run.py generate -g ${gitRef}";
           checkPhase = "./run.py check";
