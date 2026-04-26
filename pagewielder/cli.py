@@ -136,11 +136,26 @@ def filter_command(args: Namespace) -> int:
         for page_dimensions in maybe_selected_dimensions:
             selected_pages.update(dimensions_to_pages[page_dimensions])
 
-        with pikepdf.Pdf.new() as output_pdf:
-            for i, page in enumerate(input_pdf.pages, start=1):
-                if i not in selected_pages:
-                    output_pdf.pages.append(page)
-            output_pdf.save(output_path)
+        input_page_objgens = {
+            page.obj.objgen: i for i, page in enumerate(input_pdf.pages)
+        }
+        old_to_new: dict[int, int] = {}
+        new_idx = 0
+        for old_idx in range(len(input_pdf.pages)):
+            if (old_idx + 1) not in selected_pages:
+                old_to_new[old_idx] = new_idx
+                new_idx += 1
+
+        with input_pdf.open_outline() as input_outline:
+            with pikepdf.Pdf.new() as output_pdf:
+                for i, page in enumerate(input_pdf.pages, start=1):
+                    if i not in selected_pages:
+                        output_pdf.pages.append(page)
+                with output_pdf.open_outline() as output_outline:
+                    output_outline.root[:] = core.remap_outline(
+                        input_outline.root, input_page_objgens, old_to_new
+                    )
+                output_pdf.save(output_path)
 
     print(f"Filtered PDF saved as {output_path}")
 
