@@ -132,19 +132,9 @@ def filter_command(args: Namespace) -> int:
             print("No page sets selected. No output file created.", file=sys.stderr)
             return 1
 
-        selected_pages: Pages = set()
-        for page_dimensions in maybe_selected_dimensions:
-            selected_pages.update(dimensions_to_pages[page_dimensions])
+        selected_pages: Pages = {p for d in maybe_selected_dimensions for p in dimensions_to_pages[d]}
 
-        input_page_objgens = {
-            page.obj.objgen: i for i, page in enumerate(input_pdf.pages)
-        }
-        old_to_new: dict[int, int] = {}
-        new_idx = 0
-        for old_idx in range(len(input_pdf.pages)):
-            if (old_idx + 1) not in selected_pages:
-                old_to_new[old_idx] = new_idx
-                new_idx += 1
+        input_page_objgens, old_to_new = core.build_page_remap(input_pdf, selected_pages)
 
         with input_pdf.open_outline() as input_outline:
             with pikepdf.Pdf.new() as output_pdf:
