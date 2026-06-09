@@ -136,11 +136,9 @@ def filter_command(args: Namespace) -> int:
         for page_dimensions in maybe_selected_dimensions:
             selected_pages.update(dimensions_to_pages[page_dimensions])
 
-        with pikepdf.Pdf.new() as output_pdf:
-            for i, page in enumerate(input_pdf.pages, start=1):
-                if i not in selected_pages:
-                    output_pdf.pages.append(page)
-            output_pdf.save(output_path)
+        # Remove pages in place so document-level features like the outline survive.
+        core.remove_pages(input_pdf, selected_pages)
+        input_pdf.save(output_path)
 
     print(f"Filtered PDF saved as {output_path}")
 
