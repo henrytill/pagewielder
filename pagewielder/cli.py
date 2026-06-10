@@ -176,11 +176,10 @@ def excerpt_command(args: Namespace) -> int:
             print(f"Error: {e}", file=sys.stderr)
             return 1
 
-        with pikepdf.Pdf.new() as output_pdf:
-            # pikepdf uses 0-based indexing internally
-            for i in range(start_page - 1, end_page):
-                output_pdf.pages.append(input_pdf.pages[i])
-            output_pdf.save(output_path)
+        # Remove pages in place so document-level features like the outline survive.
+        unselected_pages = set(range(1, total_pages + 1)) - set(range(start_page, end_page + 1))
+        core.remove_pages(input_pdf, unselected_pages)
+        input_pdf.save(output_path)
 
     page_count = end_page - start_page + 1
     print(f"Extracted {page_count} page{'s' if page_count != 1 else ''} ({start_page}:{end_page}) to {output_path}")
