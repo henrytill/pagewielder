@@ -7,7 +7,7 @@ import pikepdf
 from pikepdf import Array, Dictionary, Name, NameTree, OutlineItem, String
 
 from pagewielder import core
-from tests.helpers import A4, PLATE, make_pdf, outline_titles
+from tests.helpers import A4, PLATE, make_pdf, outline_titles, page_label_ranges, set_page_labels
 
 
 class MapDimensionsToPagesTest(unittest.TestCase):
@@ -133,6 +133,61 @@ class RemovePagesTest(unittest.TestCase):
             core.remove_pages(pdf, {2})
 
             self.assertEqual(1, len(pdf.pages))
+
+    def test_remaps_page_labels(self) -> None:
+        """Labels follow the pages they describe."""
+        with make_pdf([A4, A4, A4, A4]) as pdf:
+            # pages 1-2 roman (i, ii), pages 3-4 arabic (1, 2)
+            set_page_labels(pdf, [0, Dictionary(S=Name.r), 2, Dictionary(S=Name.D, St=1)])
+
+            core.remove_pages(pdf, {1, 4})
+
+            self.assertEqual([(0, {"/S": "/r", "/St": "2"}), (1, {"/S": "/D"})], page_label_ranges(pdf))
+
+    def test_merges_page_label_ranges_that_run_on(self) -> None:
+        """Pages whose labels still run on are written as one range."""
+        with make_pdf([A4, A4, A4]) as pdf:
+            set_page_labels(pdf, [0, Dictionary(S=Name.D), 1, Dictionary(S=Name.D, St=2)])
+
+            core.remove_pages(pdf, {3})
+
+            self.assertEqual([(0, {"/S": "/D"})], page_label_ranges(pdf))
+
+    def test_keeps_page_label_prefixes(self) -> None:
+        """Prefixes are carried over, and a prefix-only range stays one range."""
+        with make_pdf([A4, A4, A4]) as pdf:
+            set_page_labels(pdf, [0, Dictionary(P=String("cover")), 1, Dictionary(S=Name.D, P=String("A-"))])
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual(
+                [(0, {"/P": "cover"}), (1, {"/S": "/D", "/P": "A-", "/St": "2"})],
+                page_label_ranges(pdf),
+            )
+
+    def test_drops_page_labels_when_no_labelled_page_remains(self) -> None:
+        """A tree left with nothing to say is deleted."""
+        with make_pdf([A4, A4]) as pdf:
+            set_page_labels(pdf, [1, Dictionary(S=Name.D)])
+
+            core.remove_pages(pdf, {2})
+
+            self.assertFalse(Name.PageLabels in pdf.Root)
+
+    def test_works_without_page_labels(self) -> None:
+        """PDFs without /PageLabels are handled."""
+        with make_pdf([A4, PLATE]) as pdf:
+            core.remove_pages(pdf, {2})
+            self.assertFalse(Name.PageLabels in pdf.Root)
+
+    def test_remaps_a_direct_page_labels_dictionary(self) -> None:
+        """A /PageLabels dictionary that is not an indirect object is remapped."""
+        with make_pdf([A4, A4]) as pdf:
+            pdf.Root.PageLabels = Dictionary(Nums=Array([0, Dictionary(S=Name.r)]))
+
+            core.remove_pages(pdf, {1})
+
+            self.assertEqual([(0, {"/S": "/r", "/St": "2"})], page_label_ranges(pdf))
 
     def test_outline_survives_save_and_reload(self) -> None:
         """The pruned outline survives a save/reload round trip."""
