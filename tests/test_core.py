@@ -49,7 +49,7 @@ class RemovePagesTest(unittest.TestCase):
         with _make_pdf([A4, PLATE]) as pdf:
             core.remove_pages(pdf, {2})
             self.assertEqual(1, len(pdf.pages))
-            self.assertNotIn(Name.Outlines, pdf.Root)
+            self.assertFalse(Name.Outlines in pdf.Root)
 
     def test_preserves_outline_for_remaining_pages(self) -> None:
         """Outline entries for remaining pages survive."""
