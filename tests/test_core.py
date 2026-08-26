@@ -187,6 +187,15 @@ class RemovePagesTest(unittest.TestCase):
 
                     self.assertEqual(2, len(pdf.pages))
 
+    def test_keeps_a_page_label_start_written_as_a_real(self) -> None:
+        """An out-of-spec /St written as a real still numbers its range."""
+        with make_pdf([A4, A4, A4]) as pdf:
+            set_page_labels(pdf, [0, Dictionary(S=Name.D, St=3.0)])
+
+            core.remove_pages(pdf, {1})
+
+            self.assertEqual([(0, {"/S": "/D", "/St": "4"})], page_label_ranges(pdf))
+
     def test_works_without_page_labels(self) -> None:
         """PDFs without /PageLabels are handled."""
         with make_pdf([A4, PLATE]) as pdf:
