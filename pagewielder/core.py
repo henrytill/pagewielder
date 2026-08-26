@@ -2,6 +2,7 @@
 
 import collections
 import typing
+from decimal import Decimal
 
 from pikepdf import (
     Array,
@@ -109,8 +110,10 @@ def _page_labels(pdf: Pdf) -> list[_PageLabel | None]:
             continue
         style = entry.get(Name.S)
         prefix = entry.get(Name.P)
+        # /St is an integer, but a file writing it as a real still means a
+        # number, and renumbering the range from 1 would rewrite its labels.
         start_number = entry.get(Name.St)
-        first = int(start_number) if isinstance(start_number, int) else 1
+        first = int(start_number) if isinstance(start_number, (int, Decimal)) else 1
         for index in range(max(start, 0), min(end, count)):
             labels[index] = _PageLabel(style, prefix, first + index - start)
 
