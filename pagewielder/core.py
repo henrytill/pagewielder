@@ -42,7 +42,7 @@ def map_dimensions_to_pages(pdf: Pdf) -> dict[Dimensions, Pages]:
     return ret
 
 
-def _resolve_named_destination(pdf: Pdf, name: Object) -> Optional[Object]:
+def _resolve_named_destination(pdf: Pdf, name: Name | String) -> Optional[Object]:
     """Resolve a named destination to the destination it refers to.
 
     Args:
@@ -56,12 +56,11 @@ def _resolve_named_destination(pdf: Pdf, name: Object) -> Optional[Object]:
         dests = pdf.Root.get(Name.Dests)
         return dests.get(name) if isinstance(dests, Dictionary) else None
     names = pdf.Root.get(Name.Names)
-    if isinstance(names, Dictionary) and Name.Dests in names:
-        return NameTree(names.Dests).get(str(name))
-    return None
+    tree = names.get(Name.Dests) if isinstance(names, Dictionary) else None
+    return NameTree(tree).get(str(name)) if tree is not None else None
 
 
-def _destination_page(pdf: Pdf, item: OutlineItem) -> Optional[Object]:
+def _destination_page(pdf: Pdf, item: OutlineItem) -> Optional[Dictionary]:
     """Find the page object an outline item points at, if it can be determined.
 
     Args:
@@ -71,17 +70,15 @@ def _destination_page(pdf: Pdf, item: OutlineItem) -> Optional[Object]:
     Returns:
         The page object the item targets, or None if it cannot be determined.
     """
-    dest: Optional[Object | int] = item.destination
+    dest: Object | int | None = item.destination
     if dest is None and isinstance(item.action, Dictionary) and item.action.get(Name.S) == Name.GoTo:
         dest = item.action.get(Name.D)
     if isinstance(dest, (Name, String)):
         dest = _resolve_named_destination(pdf, dest)
     if isinstance(dest, Dictionary):
         dest = dest.get(Name.D)
-    if isinstance(dest, Array) and len(dest) > 0:
-        target = dest[0]
-        if isinstance(target, Dictionary):
-            return target
+    if isinstance(dest, Array) and len(dest) > 0 and isinstance(dest[0], Dictionary):
+        return dest[0]
     return None
 
 
