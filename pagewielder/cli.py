@@ -136,7 +136,6 @@ def filter_command(args: Namespace) -> int:
         for page_dimensions in maybe_selected_dimensions:
             selected_pages.update(dimensions_to_pages[page_dimensions])
 
-        # Remove pages in place so document-level features like the outline survive.
         core.remove_pages(input_pdf, selected_pages)
         input_pdf.save(output_path)
 
@@ -176,9 +175,8 @@ def excerpt_command(args: Namespace) -> int:
             print(f"Error: {e}", file=sys.stderr)
             return 1
 
-        # Remove pages in place so document-level features like the outline survive.
-        unselected_pages = set(range(1, total_pages + 1)) - set(range(start_page, end_page + 1))
-        core.remove_pages(input_pdf, unselected_pages)
+        outside_range = set(range(1, start_page)) | set(range(end_page + 1, total_pages + 1))
+        core.remove_pages(input_pdf, outside_range)
         input_pdf.save(output_path)
 
     page_count = end_page - start_page + 1
