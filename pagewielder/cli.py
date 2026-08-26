@@ -4,9 +4,9 @@ import argparse
 import sys
 import tempfile
 from argparse import Namespace
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
 
 import pikepdf
 
