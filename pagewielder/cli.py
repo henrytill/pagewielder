@@ -5,7 +5,6 @@ import sys
 import tempfile
 from argparse import Namespace
 from collections.abc import Sequence
-from dataclasses import dataclass
 from pathlib import Path
 
 import pikepdf
@@ -13,15 +12,10 @@ import pikepdf
 from . import __version__, core
 from .core import Dimensions, Pages
 
-
-# pylint: disable=too-few-public-methods
-@dataclass(frozen=True, init=False)
-class Prompt:
-    """Prompt strings used in the command-line interface."""
-
-    AVAILABLE_DIMENSIONS = "Available dimensions (width x height) and number of pages:"
-    SELECT_DIMENSIONS = "Select page sets to remove by index (comma-separated) or press Enter to cancel: "
-    INVALID_INPUT = "Invalid input. Please enter valid indices separated by commas.\n"
+# Prompt strings used in the command-line interface.
+PROMPT_AVAILABLE_DIMENSIONS = "Available dimensions (width x height) and number of pages:"
+PROMPT_SELECT_DIMENSIONS = "Select page sets to remove by index (comma-separated) or press Enter to cancel: "
+PROMPT_INVALID_INPUT = "Invalid input. Please enter valid indices separated by commas.\n"
 
 
 def parse_page_range(page_range: str, total_pages: int) -> tuple[int, int]:
@@ -84,7 +78,7 @@ def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> set[Dimen
     """
     dimensions_list = list(dimensions_to_pages.keys())
 
-    print(Prompt.AVAILABLE_DIMENSIONS)
+    print(PROMPT_AVAILABLE_DIMENSIONS)
 
     for i, dimensions in enumerate(dimensions_list):
         width, height = dimensions
@@ -92,14 +86,14 @@ def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> set[Dimen
         print(f"{i}: {width:.2f} x {height:.2f} ({num_pages} pages)")
 
     while True:
-        user_input = input(Prompt.SELECT_DIMENSIONS)
+        user_input = input(PROMPT_SELECT_DIMENSIONS)
         if not user_input:
             return None
         selected_dimensions = user_input.split(",")
         try:
             return {dimensions_list[int(index)] for index in selected_dimensions}
         except (ValueError, IndexError):
-            print(Prompt.INVALID_INPUT)
+            print(PROMPT_INVALID_INPUT)
 
 
 def filter_command(args: Namespace) -> int:
