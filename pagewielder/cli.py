@@ -90,6 +90,29 @@ def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> set[Dimen
             print(PROMPT_INVALID_INPUT)
 
 
+def _resolve_output_path(input_path: Path, output: Path | None) -> Path | None:
+    """Choose the path to write to, reporting a collision with the input.
+
+    Args:
+        input_path: The path the command reads from.
+        output: The path requested on the command line, or None to write to a
+            temporary file.
+
+    Returns:
+        The path to write to, or None if it is the one being read from, in
+        which case the reason has been reported on stderr.
+    """
+    if output is None:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmpfile:
+            output = Path(tmpfile.name)
+
+    if input_path == output:
+        print("Input and output paths must be different.", file=sys.stderr)
+        return None
+
+    return output
+
+
 def filter_command(args: Namespace) -> int:
     """Filter a PDF file based on page dimensions.
 
@@ -100,16 +123,9 @@ def filter_command(args: Namespace) -> int:
         An exit code.
     """
     input_path: Path = args.input
-    output_path: Path | None = None
+    output_path = _resolve_output_path(input_path, args.output)
 
-    if args.output is not None:
-        output_path = args.output
-    else:
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmpfile:
-            output_path = Path(tmpfile.name)
-
-    if input_path == output_path:
-        print("Input and output paths must be different.", file=sys.stderr)
+    if output_path is None:
         return 1
 
     with pikepdf.open(input_path) as input_pdf:
@@ -142,16 +158,9 @@ def excerpt_command(args: Namespace) -> int:
         An exit code.
     """
     input_path: Path = args.input
-    output_path: Path | None = None
+    output_path = _resolve_output_path(input_path, args.output)
 
-    if args.output is not None:
-        output_path = args.output
-    else:
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmpfile:
-            output_path = Path(tmpfile.name)
-
-    if input_path == output_path:
-        print("Input and output paths must be different.", file=sys.stderr)
+    if output_path is None:
         return 1
 
     with pikepdf.open(input_path) as input_pdf:
