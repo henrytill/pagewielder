@@ -92,6 +92,26 @@ class RemovePagesTest(unittest.TestCase):
 
             self.assertEqual(["Chapter 1"], outline_titles(pdf))
 
+    def test_prunes_named_destinations_for_removed_pages(self) -> None:
+        """Named destinations pointing at removed pages are dropped."""
+        buffer = io.BytesIO()
+        with make_pdf([A4, PLATE]) as pdf:
+            name_tree = NameTree.new(pdf)
+            name_tree["plate"] = Array([pdf.pages[1].obj, Name.Fit])
+            pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=name_tree.obj))
+            pdf.Root.OpenAction = Array([pdf.pages[1].obj, Name.Fit])
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([], list(NameTree(pdf.Root.Names.Dests).keys()))
+            self.assertFalse(Name.OpenAction in pdf.Root)
+            pdf.save(buffer)
+
+        buffer.seek(0)
+        with pikepdf.open(buffer) as reloaded:
+            # The removed page is gone from the file, not merely unlinked.
+            self.assertEqual(1, len([o for o in reloaded.objects if o.get(Name.Type) == Name.Page]))
+
     def test_outline_survives_save_and_reload(self) -> None:
         """The pruned outline survives a save/reload round trip."""
         buffer = io.BytesIO()
