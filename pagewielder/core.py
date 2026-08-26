@@ -39,9 +39,9 @@ def map_dimensions_to_pages(pdf: Pdf) -> dict[Dimensions, Pages]:
     """
     ret: dict[Dimensions, Pages] = collections.defaultdict(set)
 
-    for i, page in enumerate(pdf.pages):
+    for number, page in enumerate(pdf.pages, start=1):
         dimensions = _get_dimensions(page)
-        ret[dimensions].add(i + 1)
+        ret[dimensions].add(number)
 
     return ret
 
