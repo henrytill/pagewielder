@@ -37,13 +37,11 @@ def parse_page_range(page_range: str, total_pages: int) -> tuple[int, int]:
         # Single page
         try:
             page = int(parts[0])
-            if page < 1 or page > total_pages:
-                raise ValueError(f"Page {page} is out of range (1-{total_pages})")
-            return (page, page)
         except ValueError as e:
-            if "out of range" in str(e):
-                raise
             raise ValueError(f"Invalid page number: {parts[0]}") from e
+        if page < 1 or page > total_pages:
+            raise ValueError(f"Page {page} is out of range (1-{total_pages})")
+        return (page, page)
 
     # Range.  A split with maxsplit=1 yields no more than two parts.
     start_str, end_str = parts
