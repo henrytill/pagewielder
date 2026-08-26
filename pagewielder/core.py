@@ -115,10 +115,10 @@ def remove_pages(pdf: Pdf, pages: Pages) -> None:
         pdf: A PDF file.
         pages: The set of pages to remove, numbered starting from 1.
     """
-    removed: set[_ObjGen] = {pdf.pages[number - 1].obj.objgen for number in pages}
+    removed: set[_ObjGen] = {page.obj.objgen for number, page in enumerate(pdf.pages, start=1) if number in pages}
 
     for number in sorted(pages, reverse=True):
-        del pdf.pages[number - 1]
+        pdf.pages.remove(p=number)
 
     if Name.Outlines in pdf.Root:
         with pdf.open_outline() as outline:
