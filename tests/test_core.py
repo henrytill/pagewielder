@@ -2,6 +2,7 @@
 
 import io
 import unittest
+from collections.abc import Sequence
 
 import pikepdf
 from pikepdf import Array, Dictionary, Name, NameTree, OutlineItem, String
@@ -173,6 +174,18 @@ class RemovePagesTest(unittest.TestCase):
             core.remove_pages(pdf, {2})
 
             self.assertFalse(Name.PageLabels in pdf.Root)
+
+    def test_tolerates_a_malformed_page_labels_tree(self) -> None:
+        """A /PageLabels tree that cannot be read is left alone, not fatal."""
+        malformed: list[Sequence[int | Dictionary]] = [[0], [Dictionary(S=Name.D), 0]]
+        for nums in malformed:
+            with self.subTest(nums=nums):
+                with make_pdf([A4, A4, PLATE]) as pdf:
+                    set_page_labels(pdf, nums)
+
+                    core.remove_pages(pdf, {3})
+
+                    self.assertEqual(2, len(pdf.pages))
 
     def test_works_without_page_labels(self) -> None:
         """PDFs without /PageLabels are handled."""
