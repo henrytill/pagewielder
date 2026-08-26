@@ -9,6 +9,11 @@ Dimensions = tuple[float, float]
 Pages = set[int]
 _ObjGen = tuple[int, int]
 
+# A destination may need several hops to reach an array: an action holds its
+# destination under /D, and that destination may itself be a name.  Bounding
+# the hops keeps a name that resolves back to itself from looping forever.
+_MAX_DESTINATION_HOPS = 8
+
 
 def _get_dimensions(page: Page) -> Dimensions:
     """Get the dimensions of a page in a PDF file.
@@ -80,6 +85,10 @@ def _resolve_named_destination(pdf: Pdf, name: Name | String) -> Optional[Object
 def _destination_page(pdf: Pdf, dest: Object | int | None) -> Optional[Dictionary]:
     """Find the page object a destination points at, if it can be determined.
 
+    Names and ``/D`` entries are followed in either order and any number of
+    times, so that forms like ``<< /S /GoTo /D (someName) >>`` -- an action
+    whose destination is a name -- resolve as well as a bare name does.
+
     Args:
         pdf: The PDF file the destination belongs to.
         dest: A destination, an action containing one, or a reference to a
@@ -89,10 +98,13 @@ def _destination_page(pdf: Pdf, dest: Object | int | None) -> Optional[Dictionar
         The page object the destination targets, or None if it cannot be
         determined.
     """
-    if isinstance(dest, (Name, String)):
-        dest = _resolve_named_destination(pdf, dest)
-    if isinstance(dest, Dictionary):
-        dest = dest.get(Name.D)
+    for _ in range(_MAX_DESTINATION_HOPS):
+        if isinstance(dest, (Name, String)):
+            dest = _resolve_named_destination(pdf, dest)
+        elif isinstance(dest, Dictionary):
+            dest = dest.get(Name.D)
+        else:
+            break
     if isinstance(dest, Array) and len(dest) > 0 and isinstance(dest[0], Dictionary):
         return dest[0]
     return None
@@ -152,20 +164,31 @@ def _prune_destinations(pdf: Pdf, removed: set[_ObjGen]) -> None:
         page = _destination_page(pdf, dest)
         return page is not None and page.objgen in removed
 
+    # Decide everything before deleting anything: resolving a name needs the
+    # entry it names to still be in the tree.
+    stale_dests: list[str] = []
+    stale_names: list[str | bytes] = []
+
     dests = pdf.Root.get(Name.Dests)
     if isinstance(dests, Dictionary):
-        for key in list(dests.keys()):
-            if targets_removed_page(dests[key]):
-                del dests[key]
+        stale_dests = [key for key in dests.keys() if targets_removed_page(dests[key])]
 
     name_tree = _dests_name_tree(pdf)
     if name_tree is not None:
-        for name, dest in list(name_tree.items()):
-            if targets_removed_page(dest):
-                del name_tree[name]
+        stale_names = [name for name, dest in name_tree.items() if targets_removed_page(dest)]
 
     open_action = pdf.Root.get(Name.OpenAction)
-    if open_action is not None and targets_removed_page(open_action):
+    stale_open_action = open_action is not None and targets_removed_page(open_action)
+
+    if isinstance(dests, Dictionary):
+        for key in stale_dests:
+            del dests[key]
+
+    if name_tree is not None:
+        for name in stale_names:
+            del name_tree[name]
+
+    if stale_open_action:
         del pdf.Root[Name.OpenAction]
 
 

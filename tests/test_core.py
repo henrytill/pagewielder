@@ -112,6 +112,18 @@ class RemovePagesTest(unittest.TestCase):
             # The removed page is gone from the file, not merely unlinked.
             self.assertEqual(1, len([o for o in reloaded.objects if o.get(Name.Type) == Name.Page]))
 
+    def test_prunes_an_action_whose_destination_is_a_name(self) -> None:
+        """A GoTo action naming a destination resolves through both hops."""
+        with make_pdf([A4, PLATE]) as pdf:
+            name_tree = NameTree.new(pdf)
+            name_tree["plate"] = Array([pdf.pages[1].obj, Name.Fit])
+            pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=name_tree.obj))
+            pdf.Root.OpenAction = Dictionary(S=Name.GoTo, D=String("plate"))
+
+            core.remove_pages(pdf, {2})
+
+            self.assertFalse(Name.OpenAction in pdf.Root)
+
     def test_tolerates_a_direct_destination_name_tree(self) -> None:
         """A name tree whose root is a direct object is left alone, not fatal."""
         with make_pdf([A4, PLATE]) as pdf:
