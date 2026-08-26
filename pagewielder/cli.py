@@ -45,24 +45,22 @@ def parse_page_range(page_range: str, total_pages: int) -> tuple[int, int]:
                 raise
             raise ValueError(f"Invalid page number: {parts[0]}") from e
 
-    if len(parts) == 2:
-        # Range
-        start_str, end_str = parts
+    # Range.  split(":", 1) yields at most two parts, so this is the only
+    # other shape a range string can take.
+    start_str, end_str = parts
 
-        # Default values
-        start = 1 if not start_str else int(start_str)
-        end = total_pages if not end_str else int(end_str)
+    # Default values
+    start = 1 if not start_str else int(start_str)
+    end = total_pages if not end_str else int(end_str)
 
-        if start < 1:
-            raise ValueError(f"Start page {start} must be >= 1")
-        if end > total_pages:
-            raise ValueError(f"End page {end} exceeds total pages ({total_pages})")
-        if start > end:
-            raise ValueError(f"Start page {start} must be <= end page {end}")
+    if start < 1:
+        raise ValueError(f"Start page {start} must be >= 1")
+    if end > total_pages:
+        raise ValueError(f"End page {end} exceeds total pages ({total_pages})")
+    if start > end:
+        raise ValueError(f"Start page {start} must be <= end page {end}")
 
-        return (start, end)
-
-    raise ValueError(f"Invalid page range format: {page_range}")
+    return (start, end)
 
 
 def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> set[Dimensions] | None:
