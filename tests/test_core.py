@@ -112,6 +112,16 @@ class RemovePagesTest(unittest.TestCase):
             # The removed page is gone from the file, not merely unlinked.
             self.assertEqual(1, len([o for o in reloaded.objects if o.get(Name.Type) == Name.Page]))
 
+    def test_tolerates_a_direct_destination_name_tree(self) -> None:
+        """A name tree whose root is a direct object is left alone, not fatal."""
+        with make_pdf([A4, PLATE]) as pdf:
+            dests = Dictionary(Names=Array([String("plate"), Array([pdf.pages[1].obj, Name.Fit])]))
+            pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=dests))
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual(1, len(pdf.pages))
+
     def test_outline_survives_save_and_reload(self) -> None:
         """The pruned outline survives a save/reload round trip."""
         buffer = io.BytesIO()
