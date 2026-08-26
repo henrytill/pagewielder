@@ -45,11 +45,9 @@ def parse_page_range(page_range: str, total_pages: int) -> tuple[int, int]:
                 raise
             raise ValueError(f"Invalid page number: {parts[0]}") from e
 
-    # Range.  split(":", 1) yields at most two parts, so this is the only
-    # other shape a range string can take.
+    # Range.  A split with maxsplit=1 yields no more than two parts.
     start_str, end_str = parts
 
-    # Default values
     start = 1 if not start_str else int(start_str)
     end = total_pages if not end_str else int(end_str)
 
