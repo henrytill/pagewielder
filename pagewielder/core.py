@@ -42,6 +42,24 @@ def map_dimensions_to_pages(pdf: Pdf) -> dict[Dimensions, Pages]:
     return ret
 
 
+def _dests_name_tree(pdf: Pdf) -> Optional[NameTree]:
+    """Get the name tree holding the document's named destinations.
+
+    Args:
+        pdf: A PDF file.
+
+    Returns:
+        The ``/Names /Dests`` name tree, or None if the file has none or its
+        root is not an indirect dictionary, which is what ``NameTree`` needs
+        in order to wrap it.
+    """
+    names = pdf.Root.get(Name.Names)
+    tree = names.get(Name.Dests) if isinstance(names, Dictionary) else None
+    if not isinstance(tree, Dictionary) or not tree.is_indirect:
+        return None
+    return NameTree(tree)
+
+
 def _resolve_named_destination(pdf: Pdf, name: Name | String) -> Optional[Object]:
     """Resolve a named destination to the destination it refers to.
 
@@ -55,9 +73,8 @@ def _resolve_named_destination(pdf: Pdf, name: Name | String) -> Optional[Object
     if isinstance(name, Name):
         dests = pdf.Root.get(Name.Dests)
         return dests.get(name) if isinstance(dests, Dictionary) else None
-    names = pdf.Root.get(Name.Names)
-    tree = names.get(Name.Dests) if isinstance(names, Dictionary) else None
-    return NameTree(tree).get(str(name)) if tree is not None else None
+    tree = _dests_name_tree(pdf)
+    return tree.get(str(name)) if tree is not None else None
 
 
 def _destination_page(pdf: Pdf, dest: Object | int | None) -> Optional[Dictionary]:
@@ -141,10 +158,8 @@ def _prune_destinations(pdf: Pdf, removed: set[_ObjGen]) -> None:
             if targets_removed_page(dests[key]):
                 del dests[key]
 
-    names = pdf.Root.get(Name.Names)
-    tree = names.get(Name.Dests) if isinstance(names, Dictionary) else None
-    if tree is not None:
-        name_tree = NameTree(tree)
+    name_tree = _dests_name_tree(pdf)
+    if name_tree is not None:
         for name, dest in list(name_tree.items()):
             if targets_removed_page(dest):
                 del name_tree[name]
