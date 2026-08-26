@@ -185,8 +185,11 @@ def excerpt_command(args: Namespace) -> int:
     return 0
 
 
-def main(args: Sequence[str] = sys.argv[1:]) -> int:
+def main(args: Sequence[str] | None = None) -> int:
     """The main entry point for the command-line interface.
+
+    Args:
+        args: Command-line arguments, defaulting to those of the process.
 
     Returns:
         An exit code.
