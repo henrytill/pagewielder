@@ -60,7 +60,28 @@ def _resolve_named_destination(pdf: Pdf, name: Name | String) -> Optional[Object
     return NameTree(tree).get(str(name)) if tree is not None else None
 
 
-def _destination_page(pdf: Pdf, item: OutlineItem) -> Optional[Dictionary]:
+def _destination_page(pdf: Pdf, dest: Object | int | None) -> Optional[Dictionary]:
+    """Find the page object a destination points at, if it can be determined.
+
+    Args:
+        pdf: The PDF file the destination belongs to.
+        dest: A destination, an action containing one, or a reference to a
+            named destination.
+
+    Returns:
+        The page object the destination targets, or None if it cannot be
+        determined.
+    """
+    if isinstance(dest, (Name, String)):
+        dest = _resolve_named_destination(pdf, dest)
+    if isinstance(dest, Dictionary):
+        dest = dest.get(Name.D)
+    if isinstance(dest, Array) and len(dest) > 0 and isinstance(dest[0], Dictionary):
+        return dest[0]
+    return None
+
+
+def _outline_item_page(pdf: Pdf, item: OutlineItem) -> Optional[Dictionary]:
     """Find the page object an outline item points at, if it can be determined.
 
     Args:
@@ -73,13 +94,7 @@ def _destination_page(pdf: Pdf, item: OutlineItem) -> Optional[Dictionary]:
     dest: Object | int | None = item.destination
     if dest is None and isinstance(item.action, Dictionary) and item.action.get(Name.S) == Name.GoTo:
         dest = item.action.get(Name.D)
-    if isinstance(dest, (Name, String)):
-        dest = _resolve_named_destination(pdf, dest)
-    if isinstance(dest, Dictionary):
-        dest = dest.get(Name.D)
-    if isinstance(dest, Array) and len(dest) > 0 and isinstance(dest[0], Dictionary):
-        return dest[0]
-    return None
+    return _destination_page(pdf, dest)
 
 
 def _prune_outline_items(pdf: Pdf, items: list[OutlineItem], removed: set[_ObjGen]) -> list[OutlineItem]:
@@ -96,7 +111,7 @@ def _prune_outline_items(pdf: Pdf, items: list[OutlineItem], removed: set[_ObjGe
     kept: list[OutlineItem] = []
     for item in items:
         item.children = _prune_outline_items(pdf, item.children, removed)
-        page = _destination_page(pdf, item)
+        page = _outline_item_page(pdf, item)
         if page is not None and page.objgen in removed:
             kept.extend(item.children)
         else:
@@ -104,12 +119,49 @@ def _prune_outline_items(pdf: Pdf, items: list[OutlineItem], removed: set[_ObjGe
     return kept
 
 
+def _prune_destinations(pdf: Pdf, removed: set[_ObjGen]) -> None:
+    """Drop document-level destinations that point at removed pages.
+
+    Such destinations no longer lead anywhere, and leaving them in place keeps
+    the removed page objects reachable, so they are written out again when the
+    file is saved.
+
+    Args:
+        pdf: The PDF file the destinations belong to.
+        removed: Object identifiers of the removed page objects.
+    """
+
+    def targets_removed_page(dest: Object) -> bool:
+        page = _destination_page(pdf, dest)
+        return page is not None and page.objgen in removed
+
+    dests = pdf.Root.get(Name.Dests)
+    if isinstance(dests, Dictionary):
+        for key in list(dests.keys()):
+            if targets_removed_page(dests[key]):
+                del dests[key]
+
+    names = pdf.Root.get(Name.Names)
+    tree = names.get(Name.Dests) if isinstance(names, Dictionary) else None
+    if tree is not None:
+        name_tree = NameTree(tree)
+        for name, dest in list(name_tree.items()):
+            if targets_removed_page(dest):
+                del name_tree[name]
+
+    open_action = pdf.Root.get(Name.OpenAction)
+    if open_action is not None and targets_removed_page(open_action):
+        del pdf.Root[Name.OpenAction]
+
+
 def remove_pages(pdf: Pdf, pages: Pages) -> None:
     """Remove the given pages from a PDF in place.
 
     Document-level features such as the outline (table of contents) are kept
-    intact for the remaining pages.  Outline entries that point at a removed
-    page are dropped and replaced by their children, if any.
+    intact for the remaining pages.  References to the removed pages are
+    pruned: outline entries pointing at a removed page are dropped and
+    replaced by their children, if any, and destinations naming a removed page
+    are deleted.
 
     Args:
         pdf: A PDF file.
@@ -123,3 +175,5 @@ def remove_pages(pdf: Pdf, pages: Pages) -> None:
     if Name.Outlines in pdf.Root:
         with pdf.open_outline() as outline:
             outline.root[:] = _prune_outline_items(pdf, outline.root, removed)
+
+    _prune_destinations(pdf, removed)
