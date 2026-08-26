@@ -7,7 +7,6 @@ import sys
 import venv
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 PACKAGE_NAME = "pagewielder"
 TEST_DIR = "tests"
@@ -47,7 +46,7 @@ def run(cmd: list[str], use_venv: bool = False):
         sys.exit(result.returncode)
 
 
-def generate(git_ref: Optional[str] = None):
+def generate(git_ref: str | None = None):
     version_file = Path(VERSION_FILE)
     if not version_file.exists():
         logger.error(f"Version file {VERSION_FILE} not found")

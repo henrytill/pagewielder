@@ -6,7 +6,7 @@ import tempfile
 from argparse import Namespace
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Sequence
 
 import pikepdf
 
@@ -71,7 +71,7 @@ def parse_page_range(page_range: str, total_pages: int) -> tuple[int, int]:
     raise ValueError(f"Invalid page range format: {page_range}")
 
 
-def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> Optional[set[Dimensions]]:
+def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> set[Dimensions] | None:
     """Prompt the user to one or more dimensions from a list of dimensions and
     the corresponding number of pages.
 
@@ -112,7 +112,7 @@ def filter_command(args: Namespace) -> int:
         An exit code.
     """
     input_path: Path = args.input
-    output_path: Optional[Path] = None
+    output_path: Path | None = None
 
     if args.output is not None:
         output_path = args.output
@@ -154,7 +154,7 @@ def excerpt_command(args: Namespace) -> int:
         An exit code.
     """
     input_path: Path = args.input
-    output_path: Optional[Path] = None
+    output_path: Path | None = None
 
     if args.output is not None:
         output_path = args.output
