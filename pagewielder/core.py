@@ -155,6 +155,11 @@ def _prune_destinations(pdf: Pdf, removed: set[_ObjGen]) -> None:
     the removed page objects reachable, so they are written out again when the
     file is saved.
 
+    Only ``/Root /Dests``, the ``/Root /Names /Dests`` name tree and
+    ``/Root /OpenAction`` are pruned.  Link annotations on the remaining pages
+    are a more common way to reference a page and are not touched, so a file
+    carrying those keeps both the dangling links and the pages they name.
+
     Args:
         pdf: The PDF file the destinations belong to.
         removed: Object identifiers of the removed page objects.
@@ -195,11 +200,16 @@ def _prune_destinations(pdf: Pdf, removed: set[_ObjGen]) -> None:
 def remove_pages(pdf: Pdf, pages: Pages) -> None:
     """Remove the given pages from a PDF in place.
 
-    Document-level features such as the outline (table of contents) are kept
-    intact for the remaining pages.  References to the removed pages are
-    pruned: outline entries pointing at a removed page are dropped and
-    replaced by their children, if any, and destinations naming a removed page
-    are deleted.
+    The outline (table of contents) is kept intact for the remaining pages:
+    entries pointing at a removed page are dropped and replaced by their
+    children, if any.  Document-level destinations naming a removed page are
+    deleted as well.
+
+    Other structures that reference pages are left as they are, and a file
+    using them will not come out clean: link annotations on the remaining
+    pages can still name a removed page, which also keeps that page in the
+    saved file, and ``/PageLabels`` is carried over unchanged, so its labels
+    no longer line up with the pages they describe.
 
     Args:
         pdf: A PDF file.
