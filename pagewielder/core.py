@@ -3,7 +3,20 @@
 import collections
 import typing
 
-from pikepdf import Array, Dictionary, Name, NameTree, NumberTree, Object, OutlineItem, Page, Pdf, Rectangle, String
+from pikepdf import (
+    Array,
+    Dictionary,
+    Name,
+    NameTree,
+    NumberTree,
+    Object,
+    OutlineItem,
+    Page,
+    Pdf,
+    PdfError,
+    Rectangle,
+    String,
+)
 
 Dimensions = tuple[float, float]
 Pages = set[int]
@@ -80,8 +93,13 @@ def _page_labels(pdf: Pdf) -> list[_PageLabel | None]:
         return []
 
     # A NumberTree needs an indirect object to wrap, which a file writing its
-    # ranges into a direct dictionary does not give us.
-    ranges = list(NumberTree(pdf.make_indirect(tree)).items())
+    # ranges into a direct dictionary does not give us.  Reading one is also
+    # where a malformed tree gives out, and a file we cannot label is still a
+    # file whose pages we can remove.
+    try:
+        ranges = list(NumberTree(pdf.make_indirect(tree)).items())
+    except PdfError:
+        return []
     count = len(pdf.pages)
     labels: list[_PageLabel | None] = [None] * count
 
