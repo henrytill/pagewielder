@@ -6,17 +6,14 @@ from argparse import Namespace
 from pathlib import Path
 
 import pikepdf
-from pikepdf import OutlineItem, Pdf
+from pikepdf import OutlineItem
 
 from pagewielder import cli
-
-A4 = (595.0, 842.0)
+from tests.helpers import A4, make_pdf, outline_titles
 
 
 def _make_input_pdf(path: Path) -> None:
-    with Pdf.new() as pdf:
-        for _ in range(4):
-            pdf.add_blank_page(page_size=A4)
+    with make_pdf([A4] * 4) as pdf:
         with pdf.open_outline() as outline:
             outline.root.append(OutlineItem("Chapter 1", 0))
             outline.root.append(OutlineItem("Chapter 2", 1))
@@ -39,8 +36,7 @@ class ExcerptCommandTest(unittest.TestCase):
 
             with pikepdf.open(output_path) as pdf:
                 self.assertEqual(2, len(pdf.pages))
-                with pdf.open_outline() as outline:
-                    self.assertEqual(["Chapter 2"], [item.title for item in outline.root])
+                self.assertEqual(["Chapter 2"], outline_titles(pdf))
 
 
 class ParsePageRangeTest(unittest.TestCase):
