@@ -1,7 +1,6 @@
 """Core functionality for pagewielder."""
 
 import collections
-from typing import Optional
 
 from pikepdf import Array, Dictionary, Name, NameTree, Object, OutlineItem, Page, Pdf, Rectangle, String
 
@@ -47,7 +46,7 @@ def map_dimensions_to_pages(pdf: Pdf) -> dict[Dimensions, Pages]:
     return ret
 
 
-def _dests_name_tree(pdf: Pdf) -> Optional[NameTree]:
+def _dests_name_tree(pdf: Pdf) -> NameTree | None:
     """Get the name tree holding the document's named destinations.
 
     Args:
@@ -65,7 +64,7 @@ def _dests_name_tree(pdf: Pdf) -> Optional[NameTree]:
     return NameTree(tree)
 
 
-def _resolve_named_destination(pdf: Pdf, name: Name | String) -> Optional[Object]:
+def _resolve_named_destination(pdf: Pdf, name: Name | String) -> Object | None:
     """Resolve a named destination to the destination it refers to.
 
     Args:
@@ -82,7 +81,7 @@ def _resolve_named_destination(pdf: Pdf, name: Name | String) -> Optional[Object
     return tree.get(str(name)) if tree is not None else None
 
 
-def _destination_page(pdf: Pdf, dest: Object | int | None) -> Optional[Dictionary]:
+def _destination_page(pdf: Pdf, dest: Object | int | None) -> Dictionary | None:
     """Find the page object a destination points at, if it can be determined.
 
     Names and ``/D`` entries are followed in either order and any number of
@@ -110,7 +109,7 @@ def _destination_page(pdf: Pdf, dest: Object | int | None) -> Optional[Dictionar
     return None
 
 
-def _outline_item_page(pdf: Pdf, item: OutlineItem) -> Optional[Dictionary]:
+def _outline_item_page(pdf: Pdf, item: OutlineItem) -> Dictionary | None:
     """Find the page object an outline item points at, if it can be determined.
 
     Args:
