@@ -202,15 +202,21 @@ class RemovePagesTest(unittest.TestCase):
             self.assertEqual([kept.objgen], annotation_ids(pdf, 0))
             self.assertEqual([kept.objgen], annotation_ids(pdf, 1))
 
-    def test_tolerates_a_direct_destination_name_tree(self) -> None:
-        """A name tree whose root is a direct object is left alone, not fatal."""
+    def test_prunes_a_direct_destination_name_tree(self) -> None:
+        """A name tree whose root is a direct object is pruned like any other."""
+        buffer = io.BytesIO()
         with make_pdf([A4, PLATE]) as pdf:
             dests = Dictionary(Names=Array([String("plate"), Array([pdf.pages[1].obj, Name.Fit])]))
             pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=dests))
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual(1, len(pdf.pages))
+            self.assertEqual([], list(NameTree(pdf.Root.Names.Dests).keys()))
+            pdf.save(buffer)
+
+        buffer.seek(0)
+        with pikepdf.open(buffer) as reloaded:
+            self.assertEqual(1, count_page_objects(reloaded))
 
     def test_remaps_page_labels(self) -> None:
         """Labels follow the pages they describe."""
