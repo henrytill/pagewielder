@@ -8,43 +8,24 @@ pagewielder is a Python CLI tool for manipulating PDFs: filtering pages by dimen
 
 ## Development Commands
 
-All development tasks are managed through `run.py`, which supports both system Python and virtual environment execution.
-
-### Environment Setup
-```bash
-./run.py create-env          # Create virtual environment in ./env with all dev dependencies
-```
-
-### Code Quality
-```bash
-./run.py check               # Run mypy type checks (strict mode)
-./run.py lint                # Run flake8 and pylint
-./run.py fmt                 # Format with isort and black
-./run.py test                # Run unittest tests
-```
-
-`check` and `fmt` cover `pagewielder/`, `tests/` and `version.py`.  `test` discovers from `tests/` alone.
-`lint` runs pylint over the same three, but invokes flake8 with no path, so flake8 walks the repo root minus
-the `.flake8` excludes -- `run.py` included.
-
-Add `-e` or `--venv` flag to use the virtual environment (e.g., `./run.py -e check`).
-
-### Pre-commit Hooks
-
-The same tools also run as [pre-commit](https://pre-commit.com) hooks, declared in `flake.nix` with
-[git-hooks.nix](https://github.com/cachix/git-hooks.nix).  Entering the dev shell generates `.pre-commit-config.yaml`
-(a gitignored symlink into the Nix store; don't edit or commit it) and installs the git hook.
+There is no task runner.  The formatters, linters and type checkers run as [pre-commit](https://pre-commit.com)
+hooks, declared in `flake.nix` with [git-hooks.nix](https://github.com/cachix/git-hooks.nix).  Entering the dev shell
+generates `.pre-commit-config.yaml` (a gitignored symlink into the Nix store; don't edit or commit it) and installs the
+git hook.
 
 ```bash
-nix develop                  # Shell with the tools; installs the hook
-pre-commit run --all-files   # Run the hooks over the whole repo by hand
-nix flake check              # Run them in the sandbox, as checks.pre-commit
+nix develop                                # Shell with the tools; installs the hook
+pre-commit run --all-files                 # Run the hooks over the whole repo by hand
+python -m unittest discover -v -s tests    # Test (not a hook)
+nix flake check                            # Build and test the package, and run the hooks, in the sandbox
 ```
+
+Without Nix, `pip install -e '.[dev]'` installs the Python tools from PyPI, to run by hand; there is no hook
+configuration outside the dev shell.
 
 The hooks are nixfmt, black, isort, flake8 and pylint on the changed files, and mypy and pyright on the whole project,
 which both take what to check from `pyproject.toml`.  pylint, mypy and pyright run against `lintEnv`, a Python with
-pikepdf, since the hooks' own tools see no third-party packages otherwise.  pylint skips `run.py`, which `lint` never
-covered either.
+pikepdf, since the hooks' own tools see no third-party packages otherwise.
 
 ### Version Generation
 
@@ -55,7 +36,8 @@ version from the `VERSION` file and appends the git reference: `PAGEWIELDER_GIT_
 
 The result goes into the package metadata, and `pagewielder/__init__.py` reads `__version__` from there with
 `importlib.metadata`, falling back to `unknown` when the package isn't installed.  An editable install records the
-version when it is made, so in a checkout it reports the hash from the last `create-env` rather than the current HEAD.
+version when it is made, so in a checkout it reports the hash from the last install rather than the current HEAD.  In
+the dev shell the package isn't installed at all, so it reports `unknown`.
 
 ### Running the Application
 ```bash
@@ -122,10 +104,11 @@ Tool settings live in `pyproject.toml` and `.flake8`; see Code Style below for w
 
 ### Nix Build
 ```bash
-nix build                    # Build with Nix flakes
+nix build                    # Build; the check phase runs the tests
+nix flake check              # Build, plus checks.pre-commit: the hooks over the whole repo
 ```
 
-The Nix build sets `PAGEWIELDER_GIT_REF` to the flake's revision, since the sandbox has no `.git`, and runs `./run.py check` as its check phase.
+The Nix build sets `PAGEWIELDER_GIT_REF` to the flake's revision, since the sandbox has no `.git`, and runs the tests with `unittestCheckHook` as its check phase.  `checks.pre-commit` is kept separate from the check phase, so that a new release of one of the tools fails `nix flake check` rather than the build.
 
 ## Testing
 
@@ -142,12 +125,7 @@ python -m unittest tests.test_core.RemovePagesTest.test_removes_pages
 
 ## CI/CD
 
-GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push/PR to master (and `workflow_dispatch`), on Python 3.11:
-1. `./run.py -e create-env`
-2. `./run.py -e check`
-3. `./run.py -e lint`
-
-There is no test step in CI; run `./run.py test` locally.
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs `nix flake check` on push/PR to master (and `workflow_dispatch`), which builds and tests the package and runs the hooks.  The Python version is whatever the locked nixpkgs provides; `requires-python` says 3.11 or later, but nothing tests 3.11 itself.
 
 ## Code Style
 
