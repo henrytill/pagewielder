@@ -65,9 +65,12 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
   - Two commands: `filter` (interactive dimension selection) and `excerpt` (page range extraction).
   - `parse_page_range()`: Handles the page range syntax above.
   - `select_dimensions()`: Interactive prompt for dimension-based filtering.  Answers are looked
-    up by the labels it prints, not used as list indices, so a negative one is rejected.  Its
-    prompt strings are module constants (`PROMPT_*`); the tests drive it by patching `input` and
-    match on those constants rather than on literal text.
+    up by the labels it prints, not used as list indices, so a negative one is rejected.  The
+    tests drive it by patching `input`.
+  - Every message the commands print or raise is a module constant: `PROMPT_*` for the dimension
+    prompt, `MSG_*` for the rest, with `str.format` fields where a message carries values.  Tests
+    match on these constants rather than on literal text.  argparse's help text is the exception
+    and stays with its `add_argument` call.
   - `_resolve_output_path()`: Shared by both commands; allocates the temporary file and rejects an output equal to the input.
   - `main()` takes an optional argument sequence and returns an exit code, so it can be driven
     directly.  The current tests call the `*_command` functions with a hand-built `Namespace`
