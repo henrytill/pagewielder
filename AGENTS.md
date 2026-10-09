@@ -108,7 +108,7 @@ nix build                    # Build; the check phase runs the tests
 nix flake check              # Build, plus checks.pre-commit: the hooks over the whole repo
 ```
 
-The Nix build sets `PAGEWIELDER_GIT_REF` to the flake's revision, since the sandbox has no `.git`, and runs the tests with `unittestCheckHook` as its check phase.  `checks.pre-commit` is kept separate from the check phase, so that a new release of one of the tools fails `nix flake check` rather than the build.
+The Nix build sets `PAGEWIELDER_GIT_REF` to the flake's revision, since the sandbox has no `.git`, and runs the tests with `unittestCheckHook` as its check phase.  The hooks run separately, as `checks.pre-commit`; the comment in `flake.nix` says why.
 
 ## Testing
 
