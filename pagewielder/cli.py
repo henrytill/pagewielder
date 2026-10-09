@@ -34,7 +34,8 @@ MSG_ERROR = "Error: {error}"
 MSG_SAME_PATHS = "Input and output paths must be different."
 MSG_NOTHING_SELECTED = "No page sets selected. No output file created."
 MSG_FILTERED = "Filtered PDF saved as {path}"
-MSG_EXTRACTED = "Extracted {count} page{plural} ({start}:{end}) to {path}"
+MSG_EXTRACTED_PAGE = "Extracted 1 page ({start}:{end}) to {path}"
+MSG_EXTRACTED_PAGES = "Extracted {count} pages ({start}:{end}) to {path}"
 
 
 def _parse_page_number(text: str) -> int:
@@ -213,8 +214,8 @@ def excerpt_command(args: Namespace) -> int:
         input_pdf.save(output_path)
 
     page_count = end_page - start_page + 1
-    plural = "s" if page_count != 1 else ""
-    print(MSG_EXTRACTED.format(count=page_count, plural=plural, start=start_page, end=end_page, path=output_path))
+    message = MSG_EXTRACTED_PAGE if page_count == 1 else MSG_EXTRACTED_PAGES
+    print(message.format(count=page_count, start=start_page, end=end_page, path=output_path))
 
     return 0
 
