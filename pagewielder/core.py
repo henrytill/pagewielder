@@ -298,21 +298,14 @@ def _prune_links(pdf: Pdf, removed: set[_ObjGen]) -> None:
         page = _goto_page(pdf, annot.get(Name.Dest), annot.get(Name.A))
         return page is not None and page.objgen in removed
 
-    # Pages may share one indirect /Annots array, whose entries must only be
-    # deleted once.
-    stale_links: list[tuple[Array, list[int]]] = []
-    seen_annots: set[_ObjGen] = set()
+    # Deleting a link changes nothing about how another resolves, so each page
+    # can be pruned as it is reached.  A page sharing an /Annots array already
+    # pruned for another finds nothing left to delete.
     for page in pdf.pages:
         annots = page.obj.get(Name.Annots)
-        if not isinstance(annots, Array) or (annots.is_indirect and annots.objgen in seen_annots):
+        if not isinstance(annots, Array):
             continue
-        if annots.is_indirect:
-            seen_annots.add(annots.objgen)
         stale = [index for index, annot in enumerate(annots.as_list()) if is_stale_link(annot)]
-        if stale:
-            stale_links.append((annots, stale))
-
-    for annots, stale in stale_links:
         for index in reversed(stale):
             del annots[index]
 
