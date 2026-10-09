@@ -47,6 +47,6 @@ disable = [
 ]
 
 [tool.pyright]
-# Without it pyright walks the whole tree, including the installed copy under a ./result symlink.
+# The same sources as mypy's files; without them pyright walks the whole tree, ./result's installed copy included.
 include = ["pagewielder", "tests", "version.py"]
-strict = ["pagewielder", "tests", "version.py"]
+typeCheckingMode = "strict"
