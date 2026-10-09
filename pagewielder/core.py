@@ -235,6 +235,18 @@ def _dests_name_tree(pdf: Pdf) -> NameTree | None:
     return NameTree(_tree_object(pdf, tree))
 
 
+def _indirect_id(obj: object) -> _ObjGen | None:
+    """Get the object identifier of an indirect object.
+
+    Args:
+        obj: Anything an array or dictionary may hold.
+
+    Returns:
+        The identifier, or None if obj is not an indirect object.
+    """
+    return obj.objgen if isinstance(obj, Object) and obj.is_indirect else None
+
+
 class _Resolver:
     """Decides which targets point at the pages one remove_pages() call removes.
 
@@ -250,6 +262,9 @@ class _Resolver:
             at removed pages, found up front for the same reason: the
             structure tree has to know which links ``_prune_links()``
             deletes, whether it is pruned before or after them.
+        removed_annots: The annotations on the removed pages that are on no
+            remaining page, which a page sharing an ``/Annots`` array or an
+            annotation with a removed one keeps.
         name_tree: The ``/Names /Dests`` name tree, or None if the file has
             none.  It is built once, since over a direct tree that means
             copying the tree.
@@ -272,10 +287,21 @@ class _Resolver:
         )
         self._names: dict[str | bytes, Object] = dict(self.name_tree.items()) if self.name_tree is not None else {}
         self.stale_links: list[Object] = []
+        # Indirect /Annots arrays and annotations on the remaining pages.
+        placed: set[_ObjGen | None] = set()
         for page in pdf.pages:
             annots = page.obj.get(Name.Annots)
             if isinstance(annots, Array):
+                placed |= {_indirect_id(obj) for obj in [annots, *annots.as_list()]}
                 self.stale_links += [annot for annot in annots.as_list() if self.is_stale_link(annot)]
+        placed.discard(None)
+        self._placed_annots = placed
+        self.removed_annots: list[Object] = []
+        for removed_page in removed_pages:
+            annots = removed_page.get(Name.Annots)
+            if isinstance(annots, Array) and _indirect_id(annots) not in placed:
+                self.removed_annots += [annot for annot in annots.as_list() if _indirect_id(annot) not in placed]
+        self._removed_annot_ids = {_indirect_id(annot) for annot in self.removed_annots} - {None}
 
     def _resolve_named_destination(self, name: Name | String) -> Object | None:
         """Resolve a named destination to the destination it refers to.
@@ -342,7 +368,29 @@ class _Resolver:
         """
         return self.is_removed(self._destination_page(action if dest is None else dest))
 
-    def is_stale_link(self, annot: Object) -> bool:
+    def is_removed_annotation(self, obj: Object | None) -> bool:
+        """Say whether obj is one of the removed annotations.
+
+        Args:
+            obj: Any object.
+
+        Returns:
+            True if obj is in ``removed_annots``.
+        """
+        return obj is not None and _indirect_id(obj) in self._removed_annot_ids
+
+    def is_placed_annotation(self, obj: Object | None) -> bool:
+        """Say whether obj is an annotation on a remaining page.
+
+        Args:
+            obj: Any object.
+
+        Returns:
+            True if obj is an indirect annotation in a remaining page's ``/Annots``.
+        """
+        return obj is not None and _indirect_id(obj) in self._placed_annots
+
+    def is_stale_link(self, annot: Object | None) -> bool:
         """Say whether an annotation is a link pointing at a removed page.
 
         Args:
@@ -556,20 +604,26 @@ class _StructTreePruner:
         return self._kept.get(kid.objgen, True) if kid.is_indirect else True
 
     def _keep_object_reference(self, objr: Dictionary, page: Object | None) -> bool:
-        if self._resolver.is_removed(objr.get(Name.Pg, page)):
+        resolver = self._resolver
+        obj = objr.get(Name.Obj)
+        if resolver.is_removed_annotation(obj) or resolver.is_stale_link(obj):
             return False
-        annot = objr.get(Name.Obj)
-        if not isinstance(annot, Dictionary):
-            return True
-        return not (self._resolver.is_removed(annot.get(Name.P)) or self._resolver.is_stale_link(annot))
+        # An annotation is placed by the /Annots holding it, whatever /Pg
+        # says, since its /Pg and /P may be missing or name a page sharing
+        # it.  Anything else, such as a form XObject, has only /Pg to go by.
+        if not resolver.is_placed_annotation(obj) and resolver.is_removed(objr.get(Name.Pg, page)):
+            return False
+        if resolver.is_removed(objr.get(Name.Pg)):
+            del objr.Pg
+        return True
 
 
 def _stale_parent_tree_keys(resolver: _Resolver) -> set[int]:
     """Find the ``/ParentTree`` keys of what remove_pages() removes.
 
     They are keyed by what goes: the removed pages, by ``/StructParents``,
-    and their annotations and the links pruned from the remaining pages, by
-    ``/StructParent``.
+    and the removed annotations and the links pruned from the remaining
+    pages, by ``/StructParent``.
 
     Args:
         resolver: The resolver for this remove_pages() call.
@@ -577,13 +631,8 @@ def _stale_parent_tree_keys(resolver: _Resolver) -> set[int]:
     Returns:
         The keys whose entries are to go.
     """
-    owners: list[tuple[Object, Name]] = []
-    for page in resolver.removed_pages:
-        owners.append((page, Name.StructParents))
-        annots = page.get(Name.Annots)
-        if isinstance(annots, Array):
-            owners += [(annot, Name.StructParent) for annot in annots.as_list()]
-    owners += [(annot, Name.StructParent) for annot in resolver.stale_links]
+    owners: list[tuple[Object, Name]] = [(page, Name.StructParents) for page in resolver.removed_pages]
+    owners += [(annot, Name.StructParent) for annot in [*resolver.removed_annots, *resolver.stale_links]]
     keys: set[int] = set()
     for owner, key in owners:
         number = owner.get(key) if isinstance(owner, Dictionary) else None

@@ -357,6 +357,39 @@ class StructTreeTest(unittest.TestCase):
             self.assertEqual([elem.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
             self.assertEqual(1, saved_page_objects(pdf))
 
+    def test_drops_the_reference_to_an_annotation_placed_only_by_its_page(self) -> None:
+        """An annotation on a removed page leaves the tree though no /P or /Pg names the page."""
+        with make_pdf([A4, A4]) as pdf:
+            annot = pdf.make_indirect(Dictionary(Type=Name.Annot, Subtype=Name.Text, Rect=Array([0, 0, 10, 10])))
+            annot.StructParent = 0
+            set_annotations(pdf, 1, [annot])
+            elem = struct_elem(pdf, Dictionary(Type=Name.OBJR, Obj=annot))
+            set_struct_tree(pdf, [elem], {0: elem})
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([], parent_tree_keys(pdf))
+
+    def test_keeps_an_annotation_shared_with_a_remaining_page(self) -> None:
+        """An annotation in an /Annots array a remaining page shares stays in the tree."""
+        with make_pdf([A4, A4]) as pdf:
+            annot = pdf.make_indirect(
+                Dictionary(Type=Name.Annot, Subtype=Name.Text, Rect=Array([0, 0, 10, 10]), P=pdf.pages[1].obj)
+            )
+            annot.StructParent = 0
+            set_annotations(pdf, 1, [annot])
+            pdf.pages[0].Annots = pdf.pages[1].Annots
+            objr = Dictionary(Type=Name.OBJR, Obj=annot, Pg=pdf.pages[1].obj)
+            elem = struct_elem(pdf, objr)
+            set_struct_tree(pdf, [elem], {0: elem})
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([elem.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([0], parent_tree_keys(pdf))
+            self.assertFalse(Name.Pg in elem.K)
+
     def test_drops_elements_on_removed_pages(self) -> None:
         """Elements whose content was all on removed pages go, with their /ParentTree entries."""
         with make_pdf([A4, A4]) as pdf:
