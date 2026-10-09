@@ -390,11 +390,7 @@ class StructTreeTest(unittest.TestCase):
         with make_pdf([A4, A4]) as pdf:
             first = struct_elem(pdf, 0, page=pdf.pages[0].obj)
             second = struct_elem(pdf, 0, page=pdf.pages[1].obj)
-            root = set_struct_tree(pdf, [first, second], {})
-            ids = NameTree.new(pdf)
-            ids["first"] = first
-            ids["second"] = second
-            root.IDTree = ids.obj
+            root = set_struct_tree(pdf, [first, second], {}, ids={"first": first, "second": second})
 
             core.remove_pages(pdf, {2})
 
@@ -409,7 +405,7 @@ class StructTreeTest(unittest.TestCase):
             pdf.pages[0].StructParents = 0
             pdf.pages[1].StructParents = 1
             root = set_struct_tree(pdf, [first, second], {0: Array([first]), 1: Array([second])})
-            root.ParentTree = Dictionary(Nums=Array([0, Array([first]), 1, Array([second])]))
+            root.ParentTree = root.ParentTree.copy()
 
             core.remove_pages(pdf, {2})
 
