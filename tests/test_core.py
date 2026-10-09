@@ -136,6 +136,18 @@ class RemovePagesTest(unittest.TestCase):
 
             self.assertFalse(Name.OpenAction in pdf.Root)
 
+    def test_keeps_a_remote_open_action(self) -> None:
+        """A GoToR open action names a destination in another file, not this one."""
+        with make_pdf([A4, PLATE]) as pdf:
+            name_tree = NameTree.new(pdf)
+            name_tree["plate"] = Array([pdf.pages[1].obj, Name.Fit])
+            pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=name_tree.obj))
+            pdf.Root.OpenAction = Dictionary(S=Name.GoToR, F=String("other.pdf"), D=String("plate"))
+
+            core.remove_pages(pdf, {2})
+
+            self.assertTrue(Name.OpenAction in pdf.Root)
+
     def test_prunes_links_to_removed_pages(self) -> None:
         """Links pointing at a removed page are deleted, and the page with them."""
         buffer = io.BytesIO()
