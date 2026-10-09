@@ -354,6 +354,7 @@ class StructTreeTest(unittest.TestCase):
 
             self.assertEqual([], parent_tree_keys(pdf))
             self.assertEqual([elem.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual(1, saved_page_objects(pdf))
 
     def test_drops_elements_on_removed_pages(self) -> None:
         """Elements whose content was all on removed pages go, with their /ParentTree entries."""
