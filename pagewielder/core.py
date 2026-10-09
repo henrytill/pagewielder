@@ -193,100 +193,123 @@ def _dests_name_tree(pdf: Pdf) -> NameTree | None:
     return NameTree(tree if tree.is_indirect else pdf.make_indirect(tree.copy()))
 
 
-def _resolve_named_destination(pdf: Pdf, name: Name | String) -> Object | None:
-    """Resolve a named destination to the destination it refers to.
+class _Resolver:
+    """Decides which destinations point at the pages one remove_pages() call removes.
 
-    Args:
-        pdf: The PDF file the destination belongs to.
-        name: A ``Name`` (PDF 1.1 style) or ``String`` destination reference.
-
-    Returns:
-        The destination the name resolves to, or None if it cannot be found.
+    Attributes:
+        pdf: The PDF file the destinations belong to.
+        removed: Object identifiers of the removed page objects.
+        name_tree: The ``/Names /Dests`` name tree, or None if the file has
+            none.  It is built once, since over a direct tree that means
+            copying the tree.
     """
-    if isinstance(name, Name):
-        dests = pdf.Root.get(Name.Dests)
-        return dests.get(name) if isinstance(dests, Dictionary) else None
-    tree = _dests_name_tree(pdf)
-    return tree.get(str(name)) if tree is not None else None
+
+    def __init__(self, pdf: Pdf, removed: set[_ObjGen]) -> None:
+        """Set up a resolver for pdf.
+
+        Args:
+            pdf: The PDF file the destinations belong to.
+            removed: Object identifiers of the removed page objects.
+        """
+        self.pdf = pdf
+        self.removed = removed
+        self.name_tree = _dests_name_tree(pdf)
+
+    def _resolve_named_destination(self, name: Name | String) -> Object | None:
+        """Resolve a named destination to the destination it refers to.
+
+        Args:
+            name: A ``Name`` (PDF 1.1 style) or ``String`` destination reference.
+
+        Returns:
+            The destination the name resolves to, or None if it cannot be found.
+        """
+        if isinstance(name, Name):
+            dests = self.pdf.Root.get(Name.Dests)
+            return dests.get(name) if isinstance(dests, Dictionary) else None
+        return self.name_tree.get(str(name)) if self.name_tree is not None else None
+
+    def _destination_page(self, dest: Object | int | None) -> Dictionary | None:
+        """Find the page object a destination points at, if it can be determined.
+
+        Names and ``/D`` entries are followed in either order and any number of
+        times, so that forms like ``<< /S /GoTo /D (someName) >>`` -- an action
+        whose destination is a name -- resolve as well as a bare name does.
+
+        Only a ``/GoTo`` action is followed, or a dictionary with no ``/S`` at
+        all, which is how ``/Dests`` and the name tree wrap a destination.  Other
+        kinds of action are not, since a ``/GoToR`` destination, say, names a page
+        in some other file.
+
+        Args:
+            dest: A destination, an action containing one, or a reference to a
+                named destination.
+
+        Returns:
+            The page object the destination targets, or None if it cannot be
+            determined.
+        """
+        for _ in range(_MAX_DESTINATION_HOPS):
+            if isinstance(dest, (Name, String)):
+                dest = self._resolve_named_destination(dest)
+            elif isinstance(dest, Dictionary):
+                kind = dest.get(Name.S)
+                dest = dest.get(Name.D) if kind is None or kind == Name.GoTo else None
+            else:
+                break
+        if not isinstance(dest, Array) or len(dest) == 0:
+            return None
+        # Bound to a name, since pyright does not carry an isinstance check on dest[0] over to the next dest[0].
+        page = dest[0]
+        return page if isinstance(page, Dictionary) else None
+
+    def targets_removed(self, dest: Object | int | None, action: Object | None = None) -> bool:
+        """Say whether a target resolves to a removed page.
+
+        Outline items and link annotations carry their target the same way: a
+        destination, or failing that an action, which is followed only if it
+        is ``/GoTo``.  Document-level destinations pass the destination alone.
+
+        Args:
+            dest: The destination, if there is one.
+            action: The action, if there is one.
+
+        Returns:
+            True if the target is a removed page, False if it is a remaining
+            page or cannot be determined.
+        """
+        page = self._destination_page(action if dest is None else dest)
+        return page is not None and page.objgen in self.removed
 
 
-def _destination_page(pdf: Pdf, dest: Object | int | None) -> Dictionary | None:
-    """Find the page object a destination points at, if it can be determined.
-
-    Names and ``/D`` entries are followed in either order and any number of
-    times, so that forms like ``<< /S /GoTo /D (someName) >>`` -- an action
-    whose destination is a name -- resolve as well as a bare name does.
-
-    Only a ``/GoTo`` action is followed, or a dictionary with no ``/S`` at
-    all, which is how ``/Dests`` and the name tree wrap a destination.  Other
-    kinds of action are not, since a ``/GoToR`` destination, say, names a page
-    in some other file.
-
-    Args:
-        pdf: The PDF file the destination belongs to.
-        dest: A destination, an action containing one, or a reference to a
-            named destination.
-
-    Returns:
-        The page object the destination targets, or None if it cannot be
-        determined.
-    """
-    for _ in range(_MAX_DESTINATION_HOPS):
-        if isinstance(dest, (Name, String)):
-            dest = _resolve_named_destination(pdf, dest)
-        elif isinstance(dest, Dictionary):
-            kind = dest.get(Name.S)
-            dest = dest.get(Name.D) if kind is None or kind == Name.GoTo else None
-        else:
-            break
-    if not isinstance(dest, Array) or len(dest) == 0:
-        return None
-    # Bound to a name, since pyright does not carry an isinstance check on dest[0] over to the next dest[0].
-    page = dest[0]
-    return page if isinstance(page, Dictionary) else None
-
-
-def _goto_page(pdf: Pdf, dest: Object | int | None, action: Object | None) -> Dictionary | None:
-    """Find the page object an outline item or link annotation points at.
-
-    Both carry their target the same way: a destination, or failing that an
-    action, which ``_destination_page()`` follows only if it is ``/GoTo``.
-
-    Args:
-        pdf: The PDF file the item belongs to.
-        dest: The item's destination, if it has one.
-        action: The item's action, if it has one.
-
-    Returns:
-        The page object the item targets, or None if it cannot be determined.
-    """
-    return _destination_page(pdf, action if dest is None else dest)
-
-
-def _prune_outline_items(pdf: Pdf, items: list[OutlineItem], removed: set[_ObjGen]) -> list[OutlineItem]:
+def _prune_outline_items(resolver: _Resolver, items: list[OutlineItem]) -> list[OutlineItem]:
     """Drop outline items that point at removed pages, promoting their children.
 
     Args:
-        pdf: The PDF file the outline belongs to.
+        resolver: The resolver for this remove_pages() call.
         items: Outline items at one level of the outline tree.
-        removed: Object identifiers of the removed page objects.
 
     Returns:
         The outline items to keep.
     """
     kept: list[OutlineItem] = []
     for item in items:
-        item.children = _prune_outline_items(pdf, item.children, removed)
-        page = _goto_page(pdf, item.destination, item.action)
-        if page is not None and page.objgen in removed:
+        item.children = _prune_outline_items(resolver, item.children)
+        if resolver.targets_removed(item.destination, item.action):
             kept.extend(item.children)
         else:
             kept.append(item)
     return kept
 
 
-def _prune_links(pdf: Pdf, removed: set[_ObjGen]) -> None:
-    """Delete link annotations on the remaining pages that point at removed pages.
+# Link annotations on the remaining pages that point at removed pages: each
+# /Annots array holding one, once, with the indices of its stale links in
+# ascending order.
+_StaleLinks = list[tuple[Array, list[int]]]
+
+
+def _stale_links(resolver: _Resolver) -> _StaleLinks:
+    """Find the link annotations on the remaining pages that point at removed pages.
 
     Like a stale document-level destination, such a link leads nowhere and
     keeps the page it names in the saved file.  The link is deleted outright
@@ -294,83 +317,123 @@ def _prune_links(pdf: Pdf, removed: set[_ObjGen]) -> None:
     that does nothing.
 
     Args:
-        pdf: The PDF file the pages belong to.
-        removed: Object identifiers of the removed page objects.
+        resolver: The resolver for this remove_pages() call.
+
+    Returns:
+        The links to delete.
     """
 
     def is_stale_link(annot: Object) -> bool:
         if not isinstance(annot, Dictionary) or annot.get(Name.Subtype) != Name.Link:
             return False
-        page = _goto_page(pdf, annot.get(Name.Dest), annot.get(Name.A))
-        return page is not None and page.objgen in removed
+        return resolver.targets_removed(annot.get(Name.Dest), annot.get(Name.A))
 
-    # Deleting a link changes nothing about how another resolves, so each page
-    # can be pruned as it is reached.  A page sharing an /Annots array already
-    # pruned for another finds nothing left to delete.
-    for page in pdf.pages:
+    stale: _StaleLinks = []
+    # Pages may share an /Annots array, whose links have to be counted once,
+    # or deleting them would delete twice as many.
+    seen: set[_ObjGen] = set()
+    for page in resolver.pdf.pages:
         annots = page.obj.get(Name.Annots)
         if not isinstance(annots, Array):
             continue
-        stale = [index for index, annot in enumerate(annots.as_list()) if is_stale_link(annot)]
-        for index in reversed(stale):
+        if annots.is_indirect:
+            if annots.objgen in seen:
+                continue
+            seen.add(annots.objgen)
+        indices = [index for index, annot in enumerate(annots.as_list()) if is_stale_link(annot)]
+        if indices:
+            stale.append((annots, indices))
+    return stale
+
+
+def _delete_links(stale: _StaleLinks) -> None:
+    """Delete the links _stale_links() found.
+
+    Args:
+        stale: The links to delete.
+    """
+    for annots, indices in stale:
+        for index in reversed(indices):
             del annots[index]
 
 
-def _prune_destinations(pdf: Pdf, removed: set[_ObjGen]) -> None:
-    """Drop document-level destinations that point at removed pages.
+class _StaleDestinations(typing.NamedTuple):
+    """Document-level destinations that point at removed pages.
+
+    Attributes:
+        dests: Keys of the stale entries in ``/Root /Dests``.
+        names: Names of the stale entries in the ``/Root /Names /Dests`` tree.
+        open_action: Whether ``/Root /OpenAction`` is stale.
+    """
+
+    dests: list[str]
+    names: list[str | bytes]
+    open_action: bool
+
+
+def _stale_destinations(resolver: _Resolver) -> _StaleDestinations:
+    """Find the document-level destinations that point at removed pages.
 
     Such destinations no longer lead anywhere, and leaving them in place keeps
     the removed page objects reachable, so they are written out again when the
     file is saved.
 
     Only ``/Root /Dests``, the ``/Root /Names /Dests`` name tree and
-    ``/Root /OpenAction`` are pruned; ``_prune_links()`` sees to the links on
-    the remaining pages.
+    ``/Root /OpenAction`` are looked at; ``_stale_links()`` sees to the links
+    on the remaining pages.
 
     Args:
-        pdf: The PDF file the destinations belong to.
-        removed: Object identifiers of the removed page objects.
+        resolver: The resolver for this remove_pages() call.
+
+    Returns:
+        The destinations to delete.
     """
-
-    def targets_removed_page(dest: Object) -> bool:
-        page = _destination_page(pdf, dest)
-        return page is not None and page.objgen in removed
-
-    # Decide everything before deleting anything: resolving a name needs the
-    # entry it names to still be in the tree.
     stale_dests: list[str] = []
     stale_names: list[str | bytes] = []
 
-    dests = pdf.Root.get(Name.Dests)
+    dests = resolver.pdf.Root.get(Name.Dests)
     if isinstance(dests, Dictionary):
-        stale_dests = [key for key in dests.keys() if targets_removed_page(dests[key])]
+        stale_dests = [key for key in dests.keys() if resolver.targets_removed(dests[key])]
 
-    name_tree = _dests_name_tree(pdf)
+    name_tree = resolver.name_tree
     if name_tree is not None:
-        stale_names = [name for name, dest in name_tree.items() if targets_removed_page(dest)]
+        stale_names = [name for name, dest in name_tree.items() if resolver.targets_removed(dest)]
 
-    open_action = pdf.Root.get(Name.OpenAction)
-    stale_open_action = open_action is not None and targets_removed_page(open_action)
+    open_action = resolver.pdf.Root.get(Name.OpenAction)
+    stale_open_action = open_action is not None and resolver.targets_removed(open_action)
 
+    return _StaleDestinations(stale_dests, stale_names, stale_open_action)
+
+
+def _delete_destinations(resolver: _Resolver, stale: _StaleDestinations) -> None:
+    """Delete the destinations _stale_destinations() found.
+
+    Args:
+        resolver: The resolver for this remove_pages() call.
+        stale: The destinations to delete.
+    """
+    root = resolver.pdf.Root
+    dests = root.get(Name.Dests)
     if isinstance(dests, Dictionary):
-        for key in stale_dests:
+        for key in stale.dests:
             del dests[key]
 
-    if name_tree is not None and stale_names:
+    name_tree = resolver.name_tree
+    if name_tree is not None and stale.names:
         # The tree may be an indirect copy of a direct one, which has to take
         # its place for the deletions to reach the file.  It is put back only
         # when something is deleted, so a file with nothing to prune keeps
         # the tree it had.
-        pdf.Root.Names[Name.Dests] = name_tree.obj
-        for name in stale_names:
+        root.Names[Name.Dests] = name_tree.obj
+        for name in stale.names:
             # NameTree finds a name by binary search, which misses entries in
             # a tree whose names are out of order.  Such a tree breaks the
             # spec, and keeping its stale entry beats removing no pages.
             with contextlib.suppress(KeyError):
                 del name_tree[name]
 
-    if stale_open_action:
-        del pdf.Root[Name.OpenAction]
+    if stale.open_action:
+        del root[Name.OpenAction]
 
 
 def remove_pages(pdf: Pdf, pages: Pages) -> None:
@@ -402,14 +465,20 @@ def remove_pages(pdf: Pdf, pages: Pages) -> None:
     for number in sorted(pages, reverse=True):
         pdf.pages.remove(p=number)
 
+    resolver = _Resolver(pdf, removed)
+
+    # Everything that resolves a target runs before anything is deleted,
+    # since a target may be reached through a named destination that is
+    # about to go.  The outline is pruned as it is resolved: nothing else
+    # reads it.
+    stale_links = _stale_links(resolver)
+    stale_destinations = _stale_destinations(resolver)
     if Name.Outlines in pdf.Root:
         with pdf.open_outline() as outline:
-            outline.root[:] = _prune_outline_items(pdf, outline.root, removed)
+            outline.root[:] = _prune_outline_items(resolver, outline.root)
 
-    # Links go first: a link may reach its page through a named destination,
-    # which has to still be there to resolve it.
-    _prune_links(pdf, removed)
-    _prune_destinations(pdf, removed)
+    _delete_links(stale_links)
+    _delete_destinations(resolver, stale_destinations)
 
     # A file with no labels to begin with, or labels we cannot read, is left
     # with whatever it had: there is nothing to line back up with the pages.
