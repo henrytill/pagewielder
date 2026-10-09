@@ -79,19 +79,26 @@ def struct_elem(pdf: Pdf, kids: Object | int | Sequence[Object | int], page: Obj
     return pdf.make_indirect(elem)
 
 
-def set_struct_tree(pdf: Pdf, kids: Sequence[Object], parent_tree: Mapping[int, Object]) -> Dictionary:
-    """Tag a PDF with a structure tree of the given elements and an indirect /ParentTree."""
-    nums: list[int | Object] = []
-    for key, value in sorted(parent_tree.items()):
-        nums += [key, value]
+def set_struct_tree(
+    pdf: Pdf, kids: Sequence[Object], parent_tree: Mapping[int, Object], ids: Mapping[str, Object] | None = None
+) -> Dictionary:
+    """Tag a PDF with a structure tree of the given elements, an indirect /ParentTree and, if given, an /IDTree."""
+    numbers = NumberTree.new(pdf)
+    for key, value in parent_tree.items():
+        numbers[key] = value
     root = pdf.make_indirect(
         Dictionary(
             Type=Name.StructTreeRoot,
             K=Array(kids),
-            ParentTree=pdf.make_indirect(Dictionary(Nums=Array(nums))),
+            ParentTree=numbers.obj,
             ParentTreeNextKey=max(parent_tree, default=-1) + 1,
         )
     )
+    if ids is not None:
+        id_tree = NameTree.new(pdf)
+        for name, elem in ids.items():
+            id_tree[name] = elem
+        root.IDTree = id_tree.obj
     pdf.Root.StructTreeRoot = root
     pdf.Root.MarkInfo = Dictionary(Marked=True)
     return root
