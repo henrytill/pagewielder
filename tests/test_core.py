@@ -464,6 +464,18 @@ class StructTreeTest(unittest.TestCase):
 
             self.assertEqual([first.objgen, figure.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
 
+    def test_keeps_an_element_with_no_kids_off_a_removed_page(self) -> None:
+        """An element with no kids keeps no /Pg naming a removed page."""
+        with make_pdf([A4, A4]) as pdf:
+            figure = pdf.make_indirect(Dictionary(Type=Name.StructElem, S=Name.Figure, Pg=pdf.pages[1].obj))
+            set_struct_tree(pdf, [figure], {})
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([figure.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertFalse(Name.Pg in figure)
+            self.assertEqual(1, saved_page_objects(pdf))
+
     def test_prunes_the_id_tree(self) -> None:
         """A dropped element leaves /IDTree."""
         with make_pdf([A4, A4]) as pdf:

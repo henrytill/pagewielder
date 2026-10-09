@@ -579,7 +579,12 @@ class _StructTreePruner:
             if kid.objgen in self._kept:
                 return None
             self._kept[kid.objgen] = True
-        return self._enter(kid, kid.get(Name.Pg))
+        frame = self._enter(kid, kid.get(Name.Pg))
+        # An element with no kids is kept without being walked, so it loses
+        # a /Pg naming a removed page here rather than in _leave().
+        if frame is None and self._resolver.is_removed(kid.get(Name.Pg)):
+            del kid.Pg
+        return frame
 
     def _set_kids(self, frame: _StructFrame) -> None:
         if len(frame.kept) < len(frame.items):
