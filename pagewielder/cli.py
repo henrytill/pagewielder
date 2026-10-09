@@ -37,6 +37,24 @@ MSG_FILTERED = "Filtered PDF saved as {path}"
 MSG_EXTRACTED = "Extracted {count} page{plural} ({start}:{end}) to {path}"
 
 
+def _parse_page_number(text: str) -> int:
+    """Parse one page number out of a page range.
+
+    Args:
+        text: The page number as written on the command line.
+
+    Returns:
+        The page number.
+
+    Raises:
+        ValueError: If the text is not a whole number.
+    """
+    try:
+        return int(text)
+    except ValueError as e:
+        raise ValueError(MSG_INVALID_PAGE.format(text=text)) from e
+
+
 def parse_page_range(page_range: str, total_pages: int) -> tuple[int, int]:
     """Parse a page range string and return start and end page numbers.
 
@@ -54,10 +72,7 @@ def parse_page_range(page_range: str, total_pages: int) -> tuple[int, int]:
 
     if len(parts) == 1:
         # Single page
-        try:
-            page = int(parts[0])
-        except ValueError as e:
-            raise ValueError(MSG_INVALID_PAGE.format(text=parts[0])) from e
+        page = _parse_page_number(parts[0])
         if page < 1 or page > total_pages:
             raise ValueError(MSG_PAGE_OUT_OF_RANGE.format(page=page, total=total_pages))
         return (page, page)
@@ -65,8 +80,8 @@ def parse_page_range(page_range: str, total_pages: int) -> tuple[int, int]:
     # Range.  A split with maxsplit=1 yields no more than two parts.
     start_str, end_str = parts
 
-    start = 1 if not start_str else int(start_str)
-    end = total_pages if not end_str else int(end_str)
+    start = 1 if not start_str else _parse_page_number(start_str)
+    end = total_pages if not end_str else _parse_page_number(end_str)
 
     if start < 1:
         raise ValueError(MSG_START_TOO_LOW.format(start=start))
