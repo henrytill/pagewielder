@@ -443,6 +443,24 @@ def _prune_destinations(resolver: _Resolver) -> None:
         del root[Name.OpenAction]
 
 
+class _StructFrame(typing.NamedTuple):
+    """An element, or the structure tree root, whose kids are being pruned.
+
+    Attributes:
+        holder: The element or root.
+        page: The page holder's kids are on unless they say otherwise.
+        items: Holder's kids, as they were.
+        pending: The kids still to be decided.
+        kept: The kids decided so far to keep.
+    """
+
+    holder: Dictionary
+    page: Object | None
+    items: list[Object | int]
+    pending: typing.Iterator[Object | int]
+    kept: list[Object | int]
+
+
 class _StructTreePruner:
     """Walks a structure tree, dropping what belongs to removed pages or pruned links."""
 
@@ -463,24 +481,65 @@ class _StructTreePruner:
         """Object identifiers of the indirect elements dropped."""
         return {objgen for objgen, kept in self._kept.items() if not kept}
 
-    def prune_kids(self, holder: Dictionary, page: Object | None) -> bool:
-        """Drop the kids of holder that belong to removed pages or pruned links.
+    def prune(self, root: Dictionary) -> None:
+        """Prune the tree under root.  A root left with no kids stays.
+
+        An element can be decided only once all its kids are, so the walk
+        keeps its own stack of the elements part way through, rather than
+        recursing: a tree deep enough to exhaust Python's stack is still a
+        tree whose pages we can remove.
 
         Args:
-            holder: The structure tree root or an element.
-            page: The page holder's kids are on unless they say otherwise.
-
-        Returns:
-            False if holder had kids and none is left, True otherwise.
+            root: The structure tree root.
         """
+        start = self._enter(root, None)
+        stack = [start] if start is not None else []
+        while stack:
+            frame = stack[-1]
+            for kid in frame.pending:
+                child = self._enter_element(kid) if isinstance(kid, Dictionary) else None
+                if child is not None:
+                    stack.append(child)
+                    break
+                if self._keep_kid(kid, frame.page):
+                    frame.kept.append(kid)
+            else:
+                stack.pop()
+                if self._leave(frame) and stack:
+                    stack[-1].kept.append(frame.holder)
+
+    def _enter(self, holder: Dictionary, page: Object | None) -> _StructFrame | None:
         kids = holder.get(Name.K)
         if kids is None:
-            return True
-        items = kids.as_list() if isinstance(kids, Array) else [kids]
-        kept = [kid for kid in items if self._keep_kid(kid, page)]
-        if len(kept) < len(items):
-            holder.K = Array(kept)
-        return bool(kept)
+            return None
+        # pikepdf hands back an MCID as an int, whatever its stubs say.
+        items: list[Object | int] = [*kids.as_list()] if isinstance(kids, Array) else [kids]
+        return _StructFrame(holder, page, items, iter(items), [])
+
+    def _enter_element(self, kid: Dictionary) -> _StructFrame | None:
+        # Only an element not yet decided is walked; _keep_kid() decides the
+        # rest where they stand.
+        if kid.get(Name.Type) in (Name.MCR, Name.OBJR):
+            return None
+        if kid.is_indirect:
+            if kid.objgen in self._kept:
+                return None
+            self._kept[kid.objgen] = True
+        return self._enter(kid, kid.get(Name.Pg))
+
+    def _leave(self, frame: _StructFrame) -> bool:
+        holder = frame.holder
+        if len(frame.kept) < len(frame.items):
+            holder.K = Array(frame.kept)
+        if not frame.kept:
+            if holder.is_indirect:
+                self._kept[holder.objgen] = False
+            return False
+        # Whatever named this page through the element has just gone, and
+        # the /Pg would otherwise keep the page in the file.
+        if self._resolver.is_removed(frame.page):
+            del holder.Pg
+        return True
 
     def _keep_kid(self, kid: Object | int, page: Object | None) -> bool:
         # A kid without a /Pg of its own is on its element's page.
@@ -493,7 +552,8 @@ class _StructTreePruner:
             return not self._resolver.is_removed(kid.get(Name.Pg, page))
         if kind == Name.OBJR:
             return self._keep_object_reference(kid, page)
-        return self._keep_element(kid)
+        # An element with no kids, or one already decided.
+        return self._kept.get(kid.objgen, True) if kid.is_indirect else True
 
     def _keep_object_reference(self, objr: Dictionary, page: Object | None) -> bool:
         if self._resolver.is_removed(objr.get(Name.Pg, page)):
@@ -502,22 +562,6 @@ class _StructTreePruner:
         if not isinstance(annot, Dictionary):
             return True
         return not (self._resolver.is_removed(annot.get(Name.P)) or self._resolver.is_stale_link(annot))
-
-    def _keep_element(self, elem: Dictionary) -> bool:
-        if elem.is_indirect:
-            if elem.objgen in self._kept:
-                return self._kept[elem.objgen]
-            self._kept[elem.objgen] = True
-        page = elem.get(Name.Pg)
-        if not self.prune_kids(elem, page):
-            if elem.is_indirect:
-                self._kept[elem.objgen] = False
-            return False
-        # Whatever named this page through the element has just gone, and
-        # the /Pg would otherwise keep the page in the file.
-        if self._resolver.is_removed(page):
-            del elem.Pg
-        return True
 
 
 def _stale_parent_tree_keys(resolver: _Resolver) -> set[int]:
@@ -571,8 +615,7 @@ def _prune_struct_tree(resolver: _Resolver) -> None:
         return
 
     pruner = _StructTreePruner(resolver)
-    # Whether anything is left does not matter here: an empty root stays.
-    pruner.prune_kids(root, None)
+    pruner.prune(root)
     dropped = pruner.dropped
 
     stale_keys = _stale_parent_tree_keys(resolver)
