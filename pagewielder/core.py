@@ -230,9 +230,11 @@ def _destination_page(pdf: Pdf, dest: Object | int | None) -> Dictionary | None:
             dest = dest.get(Name.D)
         else:
             break
-    if isinstance(dest, Array) and len(dest) > 0 and isinstance(dest[0], Dictionary):
-        return dest[0]
-    return None
+    if not isinstance(dest, Array) or len(dest) == 0:
+        return None
+    # Bound to a name, since pyright does not carry an isinstance check on dest[0] over to the next dest[0].
+    page = dest[0]
+    return page if isinstance(page, Dictionary) else None
 
 
 def _outline_item_page(pdf: Pdf, item: OutlineItem) -> Dictionary | None:
