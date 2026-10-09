@@ -80,6 +80,24 @@ def map_dimensions_to_pages(pdf: Pdf) -> dict[Dimensions, Pages]:
     return ret
 
 
+def _tree_object(pdf: Pdf, tree: Dictionary) -> Object:
+    """Get an object a ``NameTree`` or ``NumberTree`` can wrap, for a tree in pdf.
+
+    Args:
+        pdf: The PDF file the tree belongs to.
+        tree: The tree's root dictionary.
+
+    Returns:
+        The tree itself if it is indirect, or else an indirect copy of it,
+        which ``_delete_from_tree()`` puts in its place.
+    """
+    # A tree wrapper needs an indirect object, which a file writing its tree
+    # into a direct dictionary does not give us.  make_indirect() would
+    # convert the tree where it stands, so it is given a copy, and reading
+    # the tree leaves the document as it was.
+    return tree if tree.is_indirect else pdf.make_indirect(tree.copy())
+
+
 def _page_labels(pdf: Pdf) -> list[_PageLabel | None]:
     """Work out the label in force for each page of a document.
 
@@ -95,12 +113,10 @@ def _page_labels(pdf: Pdf) -> list[_PageLabel | None]:
     if not isinstance(tree, Dictionary):
         return []
 
-    # A NumberTree needs an indirect object to wrap, which a file writing its
-    # ranges into a direct dictionary does not give us.  Reading one is also
-    # where a malformed tree gives out, and a file we cannot label is still a
-    # file whose pages we can remove.
+    # Reading the tree is where a malformed one gives out, and a file we
+    # cannot label is still a file whose pages we can remove.
     try:
-        ranges = list(NumberTree(pdf.make_indirect(tree)).items())
+        ranges = list(NumberTree(_tree_object(pdf, tree)).items())
     except PdfError:
         return []
     count = len(pdf.pages)
@@ -172,24 +188,6 @@ def _set_page_labels(pdf: Pdf, labels: list[_PageLabel | None]) -> None:
         pdf.Root[Name.PageLabels] = tree.obj
     elif Name.PageLabels in pdf.Root:
         del pdf.Root[Name.PageLabels]
-
-
-def _tree_object(pdf: Pdf, tree: Dictionary) -> Object:
-    """Get an object a ``NameTree`` or ``NumberTree`` can wrap, for a tree in pdf.
-
-    Args:
-        pdf: The PDF file the tree belongs to.
-        tree: The tree's root dictionary.
-
-    Returns:
-        The tree itself if it is indirect, or else an indirect copy of it,
-        which ``_delete_from_tree()`` puts in its place.
-    """
-    # A tree wrapper needs an indirect object, which a file writing its tree
-    # into a direct dictionary does not give us.  make_indirect() would
-    # convert the tree where it stands, so it is given a copy, and reading
-    # the tree leaves the document as it was.
-    return tree if tree.is_indirect else pdf.make_indirect(tree.copy())
 
 
 @typing.overload
