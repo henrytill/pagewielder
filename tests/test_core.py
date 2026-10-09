@@ -435,6 +435,7 @@ class StructTreeTest(unittest.TestCase):
             core.remove_pages(pdf, {2})
 
             self.assertEqual([], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([], parent_tree_keys(pdf))
             self.assertEqual(1, saved_page_objects(pdf))
 
     def test_prunes_a_tree_deeper_than_the_recursion_limit(self) -> None:
