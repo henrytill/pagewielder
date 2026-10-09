@@ -186,8 +186,10 @@ def _dests_name_tree(pdf: Pdf) -> NameTree | None:
     if not isinstance(tree, Dictionary):
         return None
     # A NameTree needs an indirect object to wrap, which a file writing its
-    # tree into a direct dictionary does not give us.
-    return NameTree(tree if tree.is_indirect else pdf.make_indirect(tree))
+    # tree into a direct dictionary does not give us.  make_indirect() would
+    # convert the tree where it stands, so it is given a copy, and looking a
+    # name up leaves the document as it was.
+    return NameTree(tree if tree.is_indirect else pdf.make_indirect(tree.copy()))
 
 
 def _resolve_named_destination(pdf: Pdf, name: Name | String) -> Object | None:
@@ -355,7 +357,9 @@ def _prune_destinations(pdf: Pdf, removed: set[_ObjGen]) -> None:
 
     if name_tree is not None and stale_names:
         # The tree may be an indirect copy of a direct one, which has to take
-        # its place for the deletions to reach the file.
+        # its place for the deletions to reach the file.  It is put back only
+        # when something is deleted, so a file with nothing to prune keeps
+        # the tree it had.
         pdf.Root.Names[Name.Dests] = name_tree.obj
         for name in stale_names:
             del name_tree[name]
