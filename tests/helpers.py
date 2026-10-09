@@ -71,6 +71,42 @@ def named_destinations(pdf: Pdf) -> list[str]:
     return [str(name) for name in NameTree(pdf.Root.Names.Dests).keys()]
 
 
+def struct_elem(pdf: Pdf, kids: Object | int | Sequence[Object | int], page: Object | None = None) -> Object:
+    """Build an indirect /P structure element holding the given kids, on a page if given."""
+    elem = Dictionary(Type=Name.StructElem, S=Name.P, K=kids if isinstance(kids, (Object, int)) else Array(kids))
+    if page is not None:
+        elem.Pg = page
+    return pdf.make_indirect(elem)
+
+
+def set_struct_tree(pdf: Pdf, kids: Sequence[Object], parent_tree: Mapping[int, Object]) -> Dictionary:
+    """Tag a PDF with a structure tree of the given elements and an indirect /ParentTree."""
+    nums: list[int | Object] = []
+    for key, value in sorted(parent_tree.items()):
+        nums += [key, value]
+    root = pdf.make_indirect(
+        Dictionary(
+            Type=Name.StructTreeRoot,
+            K=Array(kids),
+            ParentTree=pdf.make_indirect(Dictionary(Nums=Array(nums))),
+            ParentTreeNextKey=max(parent_tree, default=-1) + 1,
+        )
+    )
+    pdf.Root.StructTreeRoot = root
+    pdf.Root.MarkInfo = Dictionary(Marked=True)
+    return root
+
+
+def parent_tree_keys(pdf: Pdf) -> list[int]:
+    """List the keys in a PDF's structure tree /ParentTree."""
+    return list(NumberTree(pdf.Root.StructTreeRoot.ParentTree).keys())
+
+
+def struct_kid_ids(holder: Object) -> list[tuple[int, int]]:
+    """List the object identifiers of the elements under a structure tree root or element."""
+    return [kid.objgen for kid in holder.K.as_list()]
+
+
 def set_page_labels(pdf: Pdf, nums: Sequence[int | Dictionary]) -> None:
     """Give a PDF a /PageLabels number tree from a flat /Nums list."""
     pdf.Root.PageLabels = pdf.make_indirect(Dictionary(Nums=Array(nums)))

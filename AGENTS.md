@@ -58,7 +58,7 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
   - `map_dimensions_to_pages()`: Groups page numbers by page dimensions, reading each page's
     size through `_get_dimensions()`, which measures the mediabox with pikepdf's `Rectangle`.
   - `remove_pages()`: Removes pages in place, keeping the rest of the document consistent (see below).
-  - Private helpers cover the bookkeeping: `_page_labels()` / `_set_page_labels()` for `/PageLabels`, with `_continues()` deciding where one range carries on into the next; `_prune_outline_items()` for the outline; `_prune_links()` for link annotations; `_prune_destinations()` for document-level destinations.
+  - Private helpers cover the bookkeeping: `_page_labels()` / `_set_page_labels()` for `/PageLabels`, with `_continues()` deciding where one range carries on into the next; `_prune_outline_items()` for the outline; `_prune_links()` for link annotations, with `_is_stale_link()` shared with the structure tree; `_prune_destinations()` for document-level destinations; `_prune_struct_tree()` and its `_StructTreePruner` for the structure tree; `_tree_object()` for wrapping a direct name or number tree.
   - `_Resolver` answers the question every pruner asks, whether a target resolves to a removed page, through `targets_removed()`, following names and `/GoTo` actions. It reads `/Root /Dests` and the `/Names /Dests` tree (from `_dests_name_tree()`, built once per call) when it is made, so a pruner deleting a stale named destination cannot change how another target resolves, and the pruners run in any order.
   - Uses pikepdf's `Page`, `Rectangle`, `NameTree`, `NumberTree` and outline APIs.
 
@@ -86,9 +86,10 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
 - **Outline**: items pointing at a removed page are dropped and replaced by their children. Destinations are followed through named destinations (`/Root /Dests` and the `/Root /Names /Dests` name tree) and through `/GoTo` actions, in any order, bounded by `_MAX_DESTINATION_HOPS`.
 - **Destinations**: stale entries in `/Root /Dests`, the `/Root /Names /Dests` tree, and `/Root /OpenAction` are deleted, which also stops the removed page objects from being written back out.
 - **Links**: `/Link` annotations on the remaining pages whose `/Dest` or `/GoTo` action resolves to a removed page are deleted outright, not left as inert clickable regions. A link reaching its page through a named destination is resolved through the resolver's copy, so it is pruned even though the name is deleted too.
+- **Structure tree**: in a tagged PDF, marked content on removed pages and object references to annotations on removed pages or to pruned links are dropped, then elements left empty, recursively, without promoting their children. A surviving element loses a `/Pg` naming a removed page, `/ParentTree` loses the entries keyed by the removed pages, their annotations and the pruned links, and `/IDTree` loses the dropped elements. A root left empty stays, as does `/MarkInfo`.
 - **`/PageLabels`**: each surviving page keeps its label, and the ranges are rebuilt against the new indices, merging ranges that run on.
 
-Known limits, deliberate: the structure tree (`/StructTreeRoot`) and article threads (`/Threads`) are not touched, so a file using them keeps the pages they name. In a tagged PDF, the structure tree can also go on referring to a pruned link, which then sits on no page (#30). Malformed or unreadable `/PageLabels` are left alone rather than treated as an error.
+Known limits, deliberate: article threads (`/Threads`) are not touched, so a file using them keeps the pages they name. A pruned link's `/ParentTree` entry is found through the structure tree's object reference to it, so a link with a `/StructParent` but no such reference keeps its entry. Malformed or unreadable `/PageLabels` are left alone rather than treated as an error.
 
 ### Type Aliases
 ```python
@@ -122,9 +123,9 @@ The Nix build sets `PAGEWIELDER_GIT_REF` to the flake's revision, since the sand
 
 Tests use Python's unittest framework, discovered from `tests/`.
 
-- `tests/test_core.py`: `map_dimensions_to_pages` plus the bulk of the suite on `remove_pages` — outline pruning, link annotations, named destinations, `/GoTo` actions, `/PageLabels` remapping, and the malformed-input cases.
+- `tests/test_core.py`: `map_dimensions_to_pages` plus the bulk of the suite on `remove_pages` — outline pruning, link annotations, named destinations, `/GoTo` actions, `/PageLabels` remapping, the structure tree (`StructTreeTest`), and the malformed-input cases.
 - `tests/test_cli.py`: `select_dimensions`, `parse_page_range` and an end-to-end `excerpt` run.
-- `tests/helpers.py`: builders and readers shared by both — `make_pdf()`, `outline_titles()`, `link()`, `set_annotations()`, `annotation_ids()`, `count_page_objects()`, `saved_page_objects()`, `set_named_destinations()`, `named_destinations()`, `set_page_labels()`, `page_label_ranges()`, and the `A4` / `PLATE` page sizes. Prefer extending these over hand-rolling PDF fixtures.
+- `tests/helpers.py`: builders and readers shared by both — `make_pdf()`, `outline_titles()`, `link()`, `set_annotations()`, `annotation_ids()`, `count_page_objects()`, `saved_page_objects()`, `set_named_destinations()`, `named_destinations()`, `struct_elem()`, `set_struct_tree()`, `parent_tree_keys()`, `struct_kid_ids()`, `set_page_labels()`, `page_label_ranges()`, and the `A4` / `PLATE` page sizes. Prefer extending these over hand-rolling PDF fixtures.
 
 Run specific test:
 ```bash

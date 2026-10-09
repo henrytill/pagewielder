@@ -173,6 +173,24 @@ def _set_page_labels(pdf: Pdf, labels: list[_PageLabel | None]) -> None:
         del pdf.Root[Name.PageLabels]
 
 
+def _tree_object(pdf: Pdf, tree: Dictionary) -> Object:
+    """Get an object a ``NameTree`` or ``NumberTree`` can wrap, for a tree in pdf.
+
+    Args:
+        pdf: The PDF file the tree belongs to.
+        tree: The tree's root dictionary.
+
+    Returns:
+        The tree itself if it is indirect, or else an indirect copy of it,
+        which has to be put in its place for changes to reach the file.
+    """
+    # A tree wrapper needs an indirect object, which a file writing its tree
+    # into a direct dictionary does not give us.  make_indirect() would
+    # convert the tree where it stands, so it is given a copy, and reading
+    # the tree leaves the document as it was.
+    return tree if tree.is_indirect else pdf.make_indirect(tree.copy())
+
+
 def _dests_name_tree(pdf: Pdf) -> NameTree | None:
     """Get the name tree holding the document's named destinations.
 
@@ -186,11 +204,7 @@ def _dests_name_tree(pdf: Pdf) -> NameTree | None:
     tree = names.get(Name.Dests) if isinstance(names, Dictionary) else None
     if not isinstance(tree, Dictionary):
         return None
-    # A NameTree needs an indirect object to wrap, which a file writing its
-    # tree into a direct dictionary does not give us.  make_indirect() would
-    # convert the tree where it stands, so it is given a copy, and looking a
-    # name up leaves the document as it was.
-    return NameTree(tree if tree.is_indirect else pdf.make_indirect(tree.copy()))
+    return NameTree(_tree_object(pdf, tree))
 
 
 class _Resolver:
@@ -311,6 +325,21 @@ def _prune_outline_items(resolver: _Resolver, items: list[OutlineItem]) -> list[
     return kept
 
 
+def _is_stale_link(resolver: _Resolver, annot: Object) -> bool:
+    """Say whether an annotation is a link pointing at a removed page.
+
+    Args:
+        resolver: The resolver for this remove_pages() call.
+        annot: An annotation.
+
+    Returns:
+        True if annot is a link whose target is a removed page.
+    """
+    if not isinstance(annot, Dictionary) or annot.get(Name.Subtype) != Name.Link:
+        return False
+    return resolver.targets_removed(annot.get(Name.Dest), annot.get(Name.A))
+
+
 def _prune_links(resolver: _Resolver) -> None:
     """Delete link annotations on the remaining pages that point at removed pages.
 
@@ -322,19 +351,13 @@ def _prune_links(resolver: _Resolver) -> None:
     Args:
         resolver: The resolver for this remove_pages() call.
     """
-
-    def is_stale_link(annot: Object) -> bool:
-        if not isinstance(annot, Dictionary) or annot.get(Name.Subtype) != Name.Link:
-            return False
-        return resolver.targets_removed(annot.get(Name.Dest), annot.get(Name.A))
-
     # A page sharing an /Annots array already pruned for another finds
     # nothing left to delete.
     for page in resolver.pdf.pages:
         annots = page.obj.get(Name.Annots)
         if not isinstance(annots, Array):
             continue
-        stale = [index for index, annot in enumerate(annots.as_list()) if is_stale_link(annot)]
+        stale = [index for index, annot in enumerate(annots.as_list()) if _is_stale_link(resolver, annot)]
         for index in reversed(stale):
             del annots[index]
 
@@ -384,6 +407,159 @@ def _prune_destinations(resolver: _Resolver) -> None:
         del root[Name.OpenAction]
 
 
+class _StructTreePruner:
+    """Walks a structure tree, dropping what belongs to removed pages or pruned links.
+
+    Attributes:
+        stale_keys: The ``/ParentTree`` keys of the annotations whose object
+            references were dropped.
+        dropped: Object identifiers of the elements dropped.
+    """
+
+    def __init__(self, resolver: _Resolver) -> None:
+        """Set up a pruner.
+
+        Args:
+            resolver: The resolver for this remove_pages() call.
+        """
+        self.resolver = resolver
+        self.stale_keys: set[int] = set()
+        self.dropped: set[_ObjGen] = set()
+        self._visited: set[_ObjGen] = set()
+
+    def on_removed_page(self, page: Object | None) -> bool:
+        """Say whether page is a removed page.
+
+        Args:
+            page: A page object, or whatever stands in its place.
+
+        Returns:
+            True if page is one of the removed page objects.
+        """
+        return isinstance(page, Dictionary) and page.objgen in self.resolver.removed
+
+    def add_stale_key(self, obj: Object | None, key: Name) -> None:
+        """Note obj's ``/ParentTree`` key as stale, if it has one.
+
+        Args:
+            obj: A page or annotation.
+            key: ``/StructParents`` for a page, ``/StructParent`` for an annotation.
+        """
+        number = obj.get(key) if isinstance(obj, Dictionary) else None
+        if isinstance(number, int):
+            self.stale_keys.add(number)
+
+    def prune_kids(self, holder: Dictionary, page: Object | None) -> bool:
+        """Drop the kids of holder that belong to removed pages or pruned links.
+
+        Args:
+            holder: The structure tree root or an element.
+            page: The page holder's kids are on unless they say otherwise.
+
+        Returns:
+            False if holder had kids and none is left, True otherwise.
+        """
+        kids = holder.get(Name.K)
+        if kids is None:
+            return True
+        items = kids.as_list() if isinstance(kids, Array) else [kids]
+        kept = [kid for kid in items if self._keep_kid(kid, page)]
+        if len(kept) < len(items):
+            holder.K = Array(kept)
+        return bool(kept)
+
+    def _keep_kid(self, kid: Object | int, page: Object | None) -> bool:
+        # A kid without a /Pg of its own is on its element's page.
+        if isinstance(kid, int):
+            return not self.on_removed_page(page)
+        if not isinstance(kid, Dictionary):
+            return True
+        kind = kid.get(Name.Type)
+        if kind == Name.MCR:
+            return not self.on_removed_page(kid.get(Name.Pg, page))
+        if kind == Name.OBJR:
+            annot = kid.get(Name.Obj)
+            stale = self.on_removed_page(kid.get(Name.Pg, page)) or (
+                isinstance(annot, Dictionary)
+                and (self.on_removed_page(annot.get(Name.P)) or _is_stale_link(self.resolver, annot))
+            )
+            if stale:
+                self.add_stale_key(annot, Name.StructParent)
+            return not stale
+        return self._keep_element(kid)
+
+    def _keep_element(self, elem: Dictionary) -> bool:
+        # An element reached twice, by a malformed tree sharing or looping
+        # back to it, is decided once.
+        if elem.is_indirect:
+            if elem.objgen in self._visited:
+                return elem.objgen not in self.dropped
+            self._visited.add(elem.objgen)
+        page = elem.get(Name.Pg)
+        if not self.prune_kids(elem, page):
+            if elem.is_indirect:
+                self.dropped.add(elem.objgen)
+            return False
+        # Whatever named this page through the element has just gone, and
+        # the /Pg would otherwise keep the page in the file.
+        if self.on_removed_page(page):
+            del elem.Pg
+        return True
+
+
+def _prune_struct_tree(resolver: _Resolver, removed_pages: list[Dictionary]) -> None:
+    """Drop the parts of the structure tree that belong to removed pages or pruned links.
+
+    Marked content on a removed page goes, as do object references to
+    annotations on a removed page and to the links ``_prune_links()``
+    deletes.  An element left with nothing in it goes too, and so on up the
+    tree; its children are not promoted as outline items are, since an
+    element's role is part of what the document means.  An element that
+    stays keeps no ``/Pg`` naming a removed page, and ``/ParentTree`` and
+    ``/IDTree`` lose their entries for what was dropped, since each would
+    otherwise keep the removed pages in the saved file.
+
+    A root left with no elements stays, empty, along with ``/MarkInfo``.
+
+    Args:
+        resolver: The resolver for this remove_pages() call.
+        removed_pages: The removed page objects.
+    """
+    pdf = resolver.pdf
+    root = pdf.Root.get(Name.StructTreeRoot)
+    if not isinstance(root, Dictionary):
+        return
+
+    pruner = _StructTreePruner(resolver)
+    pruner.prune_kids(root, None)
+
+    for page in removed_pages:
+        pruner.add_stale_key(page, Name.StructParents)
+        annots = page.get(Name.Annots)
+        if isinstance(annots, Array):
+            for annot in annots.as_list():
+                pruner.add_stale_key(annot, Name.StructParent)
+
+    parent_tree = root.get(Name.ParentTree)
+    if isinstance(parent_tree, Dictionary) and pruner.stale_keys:
+        numbers = NumberTree(_tree_object(pdf, parent_tree))
+        root.ParentTree = numbers.obj
+        for number in pruner.stale_keys:
+            del numbers[number]
+
+    id_tree = root.get(Name.IDTree)
+    if isinstance(id_tree, Dictionary) and pruner.dropped:
+        ids = NameTree(_tree_object(pdf, id_tree))
+        stale_ids = [name for name, elem in ids.items() if elem.objgen in pruner.dropped]
+        if stale_ids:
+            root.IDTree = ids.obj
+        for name in stale_ids:
+            # As for /Dests: a tree out of order may hide a name from the
+            # binary search, and keeping its entry beats removing no pages.
+            with contextlib.suppress(KeyError):
+                del ids[name]
+
+
 def remove_pages(pdf: Pdf, pages: Pages) -> None:
     """Remove the given pages from a PDF in place.
 
@@ -397,16 +573,16 @@ def remove_pages(pdf: Pdf, pages: Pages) -> None:
     indices.
 
     Link annotations on the remaining pages that point at a removed page are
-    deleted.  Other structures that reference pages, such as the structure
-    tree and article threads, are left as they are, and a file using them
-    keeps the pages they name in the saved file.  The structure tree can
-    also go on referring to a deleted link, which then sits on no page.
+    deleted, and the structure tree of a tagged PDF loses what belonged to
+    the removed pages and those links.  Article threads are left as they
+    are, and a file using them keeps the pages they name in the saved file.
 
     Args:
         pdf: A PDF file.
         pages: The set of pages to remove, numbered starting from 1.
     """
-    removed: set[_ObjGen] = {page.obj.objgen for number, page in enumerate(pdf.pages, start=1) if number in pages}
+    removed_pages = [page.obj for number, page in enumerate(pdf.pages, start=1) if number in pages]
+    removed: set[_ObjGen] = {page.objgen for page in removed_pages}
 
     labels = _page_labels(pdf)
 
@@ -421,6 +597,7 @@ def remove_pages(pdf: Pdf, pages: Pages) -> None:
 
     _prune_links(resolver)
     _prune_destinations(resolver)
+    _prune_struct_tree(resolver, removed_pages)
 
     # A file with no labels to begin with, or labels we cannot read, is left
     # with whatever it had: there is nothing to line back up with the pages.

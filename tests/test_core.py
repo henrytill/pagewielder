@@ -5,7 +5,7 @@ import unittest
 from collections.abc import Sequence
 
 import pikepdf
-from pikepdf import Array, Dictionary, Name, OutlineItem, String
+from pikepdf import Array, Dictionary, Name, NameTree, OutlineItem, String
 
 from pagewielder import core
 from tests.helpers import (
@@ -17,10 +17,14 @@ from tests.helpers import (
     named_destinations,
     outline_titles,
     page_label_ranges,
+    parent_tree_keys,
     saved_page_objects,
     set_annotations,
     set_named_destinations,
     set_page_labels,
+    set_struct_tree,
+    struct_elem,
+    struct_kid_ids,
 )
 
 
@@ -316,6 +320,87 @@ class RemovePagesTest(unittest.TestCase):
         with pikepdf.open(buffer) as reloaded:
             self.assertEqual(2, len(reloaded.pages))
             self.assertEqual(["Chapter 1", "Chapter 2"], outline_titles(reloaded))
+
+
+class StructTreeTest(unittest.TestCase):
+    """Tests for how remove_pages prunes the structure tree."""
+
+    def test_drops_the_reference_to_a_pruned_link(self) -> None:
+        """A pruned link leaves the structure tree, which keeps an empty root."""
+        with make_pdf([A4, A4]) as pdf:
+            annot = link(pdf, dest=Array([pdf.pages[1].obj, Name.Fit]))
+            annot.StructParent = 0
+            set_annotations(pdf, 0, [annot])
+            objr = Dictionary(Type=Name.OBJR, Obj=annot, Pg=pdf.pages[0].obj)
+            link_elem = struct_elem(pdf, objr, page=pdf.pages[0].obj)
+            set_struct_tree(pdf, [link_elem], {0: link_elem})
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([], parent_tree_keys(pdf))
+            self.assertEqual(1, saved_page_objects(pdf))
+
+    def test_drops_elements_on_removed_pages(self) -> None:
+        """Elements whose content was all on removed pages go, with their /ParentTree entries."""
+        with make_pdf([A4, A4]) as pdf:
+            first = struct_elem(pdf, 0, page=pdf.pages[0].obj)
+            second = struct_elem(pdf, 0, page=pdf.pages[1].obj)
+            document = struct_elem(pdf, [first, second])
+            pdf.pages[0].StructParents = 0
+            pdf.pages[1].StructParents = 1
+            set_struct_tree(pdf, [document], {0: Array([first]), 1: Array([second])})
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([first.objgen], struct_kid_ids(document))
+            self.assertEqual([0], parent_tree_keys(pdf))
+            self.assertEqual(1, saved_page_objects(pdf))
+
+    def test_keeps_an_element_with_content_on_a_remaining_page(self) -> None:
+        """An element keeps its content on remaining pages and loses a /Pg naming a removed one."""
+        with make_pdf([A4, A4]) as pdf:
+            mcr = Dictionary(Type=Name.MCR, Pg=pdf.pages[0].obj, MCID=0)
+            elem = struct_elem(pdf, [0, mcr], page=pdf.pages[1].obj)
+            set_struct_tree(pdf, [elem], {})
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([elem.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([Name.MCR], [kid.Type for kid in elem.K.as_list()])
+            self.assertFalse(Name.Pg in elem)
+            self.assertEqual(1, saved_page_objects(pdf))
+
+    def test_prunes_the_id_tree(self) -> None:
+        """A dropped element leaves /IDTree."""
+        with make_pdf([A4, A4]) as pdf:
+            first = struct_elem(pdf, 0, page=pdf.pages[0].obj)
+            second = struct_elem(pdf, 0, page=pdf.pages[1].obj)
+            root = set_struct_tree(pdf, [first, second], {})
+            ids = NameTree.new(pdf)
+            ids["first"] = first
+            ids["second"] = second
+            root.IDTree = ids.obj
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual(["first"], list(NameTree(root.IDTree).keys()))
+            self.assertEqual(1, saved_page_objects(pdf))
+
+    def test_prunes_a_direct_parent_tree(self) -> None:
+        """A /ParentTree written as a direct dictionary is pruned too."""
+        with make_pdf([A4, A4]) as pdf:
+            first = struct_elem(pdf, 0, page=pdf.pages[0].obj)
+            second = struct_elem(pdf, 0, page=pdf.pages[1].obj)
+            pdf.pages[0].StructParents = 0
+            pdf.pages[1].StructParents = 1
+            root = set_struct_tree(pdf, [first, second], {0: Array([first]), 1: Array([second])})
+            root.ParentTree = Dictionary(Nums=Array([0, Array([first]), 1, Array([second])]))
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([0], parent_tree_keys(pdf))
+            self.assertEqual(1, saved_page_objects(pdf))
 
 
 if __name__ == "__main__":
