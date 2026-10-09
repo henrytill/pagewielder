@@ -96,7 +96,7 @@ Uses hatchling for building. The package can also be built with Nix (see `flake.
 - Python >=3.11 required
 - Version from `version.py` (see Version Generation); description is static
 - Single runtime dependency: pikepdf >=7.1.2
-- Dev dependencies (`.[dev]`): black, flake8, isort, mypy, pylint; the `test` and `types` extras exist but are empty
+- Dev dependencies (`.[dev]`): black, flake8, isort, mypy, pylint
 - Console script: `pagewielder = "pagewielder.__main__:main"`
 - The package ships `py.typed`
 
