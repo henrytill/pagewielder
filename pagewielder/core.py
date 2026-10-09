@@ -214,23 +214,25 @@ class _Resolver:
     deleting a stale one later cannot change how anything else resolves.
     The pruners can therefore run, and delete as they go, in any order.
 
-    ``pdf`` and ``removed`` are kept as given to ``__init__``.
+    ``pdf`` and ``removed_pages`` are kept as given to ``__init__``.
 
     Attributes:
+        removed: Object identifiers of the removed page objects.
         name_tree: The ``/Names /Dests`` name tree, or None if the file has
             none.  It is built once, since over a direct tree that means
             copying the tree.
     """
 
-    def __init__(self, pdf: Pdf, removed: set[_ObjGen]) -> None:
+    def __init__(self, pdf: Pdf, removed_pages: list[Dictionary]) -> None:
         """Set up a resolver for pdf.
 
         Args:
             pdf: The PDF file the targets belong to.
-            removed: Object identifiers of the removed page objects.
+            removed_pages: The removed page objects.
         """
         self.pdf = pdf
-        self.removed = removed
+        self.removed_pages = removed_pages
+        self.removed: set[_ObjGen] = {page.objgen for page in removed_pages}
         self.name_tree = _dests_name_tree(pdf)
         dests = pdf.Root.get(Name.Dests)
         self._dests: dict[str, Object] = (
@@ -301,8 +303,18 @@ class _Resolver:
             True if the target is a removed page, False if it is a remaining
             page or cannot be determined.
         """
-        page = self._destination_page(action if dest is None else dest)
-        return page is not None and page.objgen in self.removed
+        return self.is_removed(self._destination_page(action if dest is None else dest))
+
+    def is_removed(self, page: Object | None) -> bool:
+        """Say whether page is a removed page.
+
+        Args:
+            page: A page object, or whatever stands in its place.
+
+        Returns:
+            True if page is one of the removed page objects.
+        """
+        return isinstance(page, Dictionary) and page.objgen in self.removed
 
 
 def _prune_outline_items(resolver: _Resolver, items: list[OutlineItem]) -> list[OutlineItem]:
@@ -427,17 +439,6 @@ class _StructTreePruner:
         self.dropped: set[_ObjGen] = set()
         self._visited: set[_ObjGen] = set()
 
-    def on_removed_page(self, page: Object | None) -> bool:
-        """Say whether page is a removed page.
-
-        Args:
-            page: A page object, or whatever stands in its place.
-
-        Returns:
-            True if page is one of the removed page objects.
-        """
-        return isinstance(page, Dictionary) and page.objgen in self.resolver.removed
-
     def add_stale_key(self, obj: Object | None, key: Name) -> None:
         """Note obj's ``/ParentTree`` key as stale, if it has one.
 
@@ -471,17 +472,17 @@ class _StructTreePruner:
     def _keep_kid(self, kid: Object | int, page: Object | None) -> bool:
         # A kid without a /Pg of its own is on its element's page.
         if isinstance(kid, int):
-            return not self.on_removed_page(page)
+            return not self.resolver.is_removed(page)
         if not isinstance(kid, Dictionary):
             return True
         kind = kid.get(Name.Type)
         if kind == Name.MCR:
-            return not self.on_removed_page(kid.get(Name.Pg, page))
+            return not self.resolver.is_removed(kid.get(Name.Pg, page))
         if kind == Name.OBJR:
             annot = kid.get(Name.Obj)
-            stale = self.on_removed_page(kid.get(Name.Pg, page)) or (
+            stale = self.resolver.is_removed(kid.get(Name.Pg, page)) or (
                 isinstance(annot, Dictionary)
-                and (self.on_removed_page(annot.get(Name.P)) or _is_stale_link(self.resolver, annot))
+                and (self.resolver.is_removed(annot.get(Name.P)) or _is_stale_link(self.resolver, annot))
             )
             if stale:
                 self.add_stale_key(annot, Name.StructParent)
@@ -502,12 +503,12 @@ class _StructTreePruner:
             return False
         # Whatever named this page through the element has just gone, and
         # the /Pg would otherwise keep the page in the file.
-        if self.on_removed_page(page):
+        if self.resolver.is_removed(page):
             del elem.Pg
         return True
 
 
-def _prune_struct_tree(resolver: _Resolver, removed_pages: list[Dictionary]) -> None:
+def _prune_struct_tree(resolver: _Resolver) -> None:
     """Drop the parts of the structure tree that belong to removed pages or pruned links.
 
     Marked content on a removed page goes, as do object references to
@@ -523,7 +524,6 @@ def _prune_struct_tree(resolver: _Resolver, removed_pages: list[Dictionary]) -> 
 
     Args:
         resolver: The resolver for this remove_pages() call.
-        removed_pages: The removed page objects.
     """
     pdf = resolver.pdf
     root = pdf.Root.get(Name.StructTreeRoot)
@@ -533,7 +533,7 @@ def _prune_struct_tree(resolver: _Resolver, removed_pages: list[Dictionary]) -> 
     pruner = _StructTreePruner(resolver)
     pruner.prune_kids(root, None)
 
-    for page in removed_pages:
+    for page in resolver.removed_pages:
         pruner.add_stale_key(page, Name.StructParents)
         annots = page.get(Name.Annots)
         if isinstance(annots, Array):
@@ -582,14 +582,13 @@ def remove_pages(pdf: Pdf, pages: Pages) -> None:
         pages: The set of pages to remove, numbered starting from 1.
     """
     removed_pages = [page.obj for number, page in enumerate(pdf.pages, start=1) if number in pages]
-    removed: set[_ObjGen] = {page.objgen for page in removed_pages}
 
     labels = _page_labels(pdf)
 
     for number in sorted(pages, reverse=True):
         pdf.pages.remove(p=number)
 
-    resolver = _Resolver(pdf, removed)
+    resolver = _Resolver(pdf, removed_pages)
 
     if Name.Outlines in pdf.Root:
         with pdf.open_outline() as outline:
@@ -597,7 +596,7 @@ def remove_pages(pdf: Pdf, pages: Pages) -> None:
 
     _prune_links(resolver)
     _prune_destinations(resolver)
-    _prune_struct_tree(resolver, removed_pages)
+    _prune_struct_tree(resolver)
 
     # A file with no labels to begin with, or labels we cannot read, is left
     # with whatever it had: there is nothing to line back up with the pages.
