@@ -95,6 +95,13 @@ class ParsePageRangeTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 cli.parse_page_range(page_range, 10)
 
+    def test_reports_malformed_page_numbers_alike(self) -> None:
+        """A malformed page number gets the same message wherever it appears."""
+        for page_range in ("x", "x:5", "1:x"):
+            with self.subTest(page_range=page_range), self.assertRaises(ValueError) as caught:
+                cli.parse_page_range(page_range, 10)
+            self.assertEqual(cli.MSG_INVALID_PAGE.format(text="x"), str(caught.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
