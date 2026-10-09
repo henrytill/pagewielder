@@ -35,12 +35,15 @@
           pyproject = true;
           build-system = with pkgs.python3Packages; [ hatchling ];
           dependencies = with pkgs.python3Packages; [ pikepdf ];
-          nativeCheckInputs = with pkgs.python3Packages; [ mypy ];
           src = self;
-          patchPhase = "patchShebangs run.py";
           # version.py asks git for the reference, and the sandbox has no .git.
           env.PAGEWIELDER_GIT_REF = gitRef;
-          checkPhase = "./run.py check";
+          nativeCheckInputs = [ pkgs.python3Packages.unittestCheckHook ];
+          unittestFlags = [
+            "-v"
+            "-s"
+            "tests"
+          ];
         };
     in
     flake-utils.lib.eachDefaultSystem (
@@ -67,8 +70,6 @@
             pylint = {
               enable = true;
               package = lintEnv;
-              # `./run.py lint` never pointed pylint at run.py itself, which doesn't meet its docstring rules.
-              excludes = [ "^run\\.py$" ];
             };
             # The type checkers look at the whole project, not just the files that changed, so that a change to one
             # module is checked against the modules using it. Both take what to check from pyproject.toml.
@@ -89,6 +90,8 @@
         packages.pagewielder = pagewielder;
         packages.default = pagewielder;
 
+        # The package's check phase runs the tests.
+        checks.pagewielder = self.packages.${system}.pagewielder;
         # Runs the hooks over the whole repo. They are kept out of the package's check phase so that a new release of
         # one of the tools fails `nix flake check` rather than the build.
         checks.pre-commit = preCommit;
