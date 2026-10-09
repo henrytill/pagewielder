@@ -453,6 +453,17 @@ class StructTreeTest(unittest.TestCase):
 
             self.assertEqual([kept.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
 
+    def test_keeps_an_element_that_had_no_kids(self) -> None:
+        """An element with an empty /K was not emptied by the removal, and stays."""
+        with make_pdf([A4, A4]) as pdf:
+            first = struct_elem(pdf, 0, page=pdf.pages[0].obj)
+            figure = struct_elem(pdf, [])
+            set_struct_tree(pdf, [first, figure], {})
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([first.objgen, figure.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
+
     def test_prunes_the_id_tree(self) -> None:
         """A dropped element leaves /IDTree."""
         with make_pdf([A4, A4]) as pdf:
