@@ -179,14 +179,21 @@ def _dests_name_tree(pdf: Pdf) -> NameTree | None:
         pdf: A PDF file.
 
     Returns:
-        The ``/Names /Dests`` name tree, or None if the file has none or its
-        root is not an indirect dictionary, which is what ``NameTree`` needs
-        in order to wrap it.
+        The ``/Names /Dests`` name tree, or None if the file has none.
     """
     names = pdf.Root.get(Name.Names)
-    tree = names.get(Name.Dests) if isinstance(names, Dictionary) else None
-    if not isinstance(tree, Dictionary) or not tree.is_indirect:
+    if not isinstance(names, Dictionary):
         return None
+    tree = names.get(Name.Dests)
+    if not isinstance(tree, Dictionary):
+        return None
+    # A NameTree needs an indirect object to wrap, as a NumberTree does in
+    # _page_labels().  Unlike there, the indirect copy is put back in place
+    # of the direct one, since entries pruned from it have to be gone from
+    # the file too.
+    if not tree.is_indirect:
+        tree = pdf.make_indirect(tree)
+        names[Name.Dests] = tree
     return NameTree(tree)
 
 
