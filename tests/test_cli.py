@@ -90,10 +90,18 @@ class ParsePageRangeTest(unittest.TestCase):
         self.assertEqual((1, 10), cli.parse_page_range(":10", 10))
 
     def test_rejects_invalid_ranges(self) -> None:
-        """Out-of-range and malformed inputs raise ValueError."""
-        for page_range in ("0", "11", "5:1", "1:11", "abc"):
-            with self.assertRaises(ValueError):
+        """Out-of-range inputs raise ValueError with the message for their fault."""
+        cases = {
+            "0": cli.MSG_PAGE_OUT_OF_RANGE.format(page=0, total=10),
+            "11": cli.MSG_PAGE_OUT_OF_RANGE.format(page=11, total=10),
+            "0:5": cli.MSG_START_TOO_LOW.format(start=0),
+            "1:11": cli.MSG_END_TOO_HIGH.format(end=11, total=10),
+            "5:1": cli.MSG_START_AFTER_END.format(start=5, end=1),
+        }
+        for page_range, message in cases.items():
+            with self.subTest(page_range=page_range), self.assertRaises(ValueError) as caught:
                 cli.parse_page_range(page_range, 10)
+            self.assertEqual(message, str(caught.exception))
 
     def test_reports_malformed_page_numbers_alike(self) -> None:
         """A malformed page number gets the same message wherever it appears."""
