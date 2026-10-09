@@ -553,7 +553,9 @@ class _StructTreePruner:
                     frame.kept.append(kid)
             else:
                 stack.pop()
-                if self._leave(frame) and stack:
+                if not stack:
+                    self._set_kids(frame)
+                elif self._leave(frame):
                     stack[-1].kept.append(frame.holder)
 
     def _enter(self, holder: Dictionary, page: Object | None) -> _StructFrame | None:
@@ -575,14 +577,23 @@ class _StructTreePruner:
             self._kept[kid.objgen] = True
         return self._enter(kid, kid.get(Name.Pg))
 
+    def _set_kids(self, frame: _StructFrame) -> None:
+        if len(frame.kept) < len(frame.items):
+            frame.holder.K = Array(frame.kept)
+
     def _leave(self, frame: _StructFrame) -> bool:
         holder = frame.holder
-        if len(frame.kept) < len(frame.items):
-            holder.K = Array(frame.kept)
         if not frame.kept:
             if holder.is_indirect:
                 self._kept[holder.objgen] = False
+            # A dropped element can still be reached, from a /ParentTree
+            # entry for a form XObject, say, so it lets go of what named
+            # the removed pages.
+            for key in (Name.K, Name.Pg):
+                if key in holder:
+                    del holder[key]
             return False
+        self._set_kids(frame)
         # Whatever named this page through the element has just gone, and
         # the /Pg would otherwise keep the page in the file.
         if self._resolver.is_removed(frame.page):
