@@ -5,7 +5,7 @@ import unittest
 from collections.abc import Sequence
 
 import pikepdf
-from pikepdf import Array, Dictionary, Name, NameTree, OutlineItem, String
+from pikepdf import Array, Dictionary, Name, OutlineItem, String
 
 from pagewielder import core
 from tests.helpers import (
@@ -15,9 +15,11 @@ from tests.helpers import (
     count_page_objects,
     link,
     make_pdf,
+    named_destinations,
     outline_titles,
     page_label_ranges,
     set_annotations,
+    set_named_destinations,
     set_page_labels,
 )
 
@@ -93,9 +95,7 @@ class RemovePagesTest(unittest.TestCase):
     def test_prunes_entries_using_named_destinations(self) -> None:
         """Entries using named destinations are pruned."""
         with make_pdf([A4, PLATE]) as pdf:
-            name_tree = NameTree.new(pdf)
-            name_tree["plate"] = Array([pdf.pages[1].obj, Name.Fit])
-            pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=name_tree.obj))
+            set_named_destinations(pdf, {"plate": Array([pdf.pages[1].obj, Name.Fit])})
             with pdf.open_outline() as outline:
                 outline.root.append(OutlineItem("Chapter 1", 0))
                 outline.root.append(OutlineItem("Plate", String("plate")))
@@ -108,14 +108,12 @@ class RemovePagesTest(unittest.TestCase):
         """Named destinations pointing at removed pages are dropped."""
         buffer = io.BytesIO()
         with make_pdf([A4, PLATE]) as pdf:
-            name_tree = NameTree.new(pdf)
-            name_tree["plate"] = Array([pdf.pages[1].obj, Name.Fit])
-            pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=name_tree.obj))
+            set_named_destinations(pdf, {"plate": Array([pdf.pages[1].obj, Name.Fit])})
             pdf.Root.OpenAction = Array([pdf.pages[1].obj, Name.Fit])
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([], list(NameTree(pdf.Root.Names.Dests).keys()))
+            self.assertEqual([], named_destinations(pdf))
             self.assertFalse(Name.OpenAction in pdf.Root)
             pdf.save(buffer)
 
@@ -127,9 +125,7 @@ class RemovePagesTest(unittest.TestCase):
     def test_prunes_an_action_whose_destination_is_a_name(self) -> None:
         """A GoTo action naming a destination resolves through both hops."""
         with make_pdf([A4, PLATE]) as pdf:
-            name_tree = NameTree.new(pdf)
-            name_tree["plate"] = Array([pdf.pages[1].obj, Name.Fit])
-            pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=name_tree.obj))
+            set_named_destinations(pdf, {"plate": Array([pdf.pages[1].obj, Name.Fit])})
             pdf.Root.OpenAction = Dictionary(S=Name.GoTo, D=String("plate"))
 
             core.remove_pages(pdf, {2})
@@ -139,9 +135,7 @@ class RemovePagesTest(unittest.TestCase):
     def test_keeps_a_remote_open_action(self) -> None:
         """A GoToR open action names a destination in another file, not this one."""
         with make_pdf([A4, PLATE]) as pdf:
-            name_tree = NameTree.new(pdf)
-            name_tree["plate"] = Array([pdf.pages[1].obj, Name.Fit])
-            pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=name_tree.obj))
+            set_named_destinations(pdf, {"plate": Array([pdf.pages[1].obj, Name.Fit])})
             pdf.Root.OpenAction = Dictionary(S=Name.GoToR, F=String("other.pdf"), D=String("plate"))
 
             core.remove_pages(pdf, {2})
@@ -166,9 +160,7 @@ class RemovePagesTest(unittest.TestCase):
     def test_prunes_links_using_goto_actions_and_named_destinations(self) -> None:
         """A link whose GoTo action names a destination resolves through both hops."""
         with make_pdf([A4, PLATE]) as pdf:
-            name_tree = NameTree.new(pdf)
-            name_tree["plate"] = Array([pdf.pages[1].obj, Name.Fit])
-            pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=name_tree.obj))
+            set_named_destinations(pdf, {"plate": Array([pdf.pages[1].obj, Name.Fit])})
             set_annotations(pdf, 0, [link(pdf, action=Dictionary(S=Name.GoTo, D=String("plate")))])
 
             core.remove_pages(pdf, {2})
@@ -211,7 +203,7 @@ class RemovePagesTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([], list(NameTree(pdf.Root.Names.Dests).keys()))
+            self.assertEqual([], named_destinations(pdf))
             pdf.save(buffer)
 
         buffer.seek(0)
