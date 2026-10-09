@@ -81,7 +81,7 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
 - **Links**: `/Link` annotations on the remaining pages whose `/Dest` or `/GoTo` action resolves to a removed page are deleted outright, not left as inert clickable regions. Links are pruned before destinations, since resolving one may need a named destination that is about to go.
 - **`/PageLabels`**: each surviving page keeps its label, and the ranges are rebuilt against the new indices, merging ranges that run on.
 
-Known limits, deliberate: the structure tree (`/StructTreeRoot`) and article threads (`/Threads`) are not touched, so a file using them keeps the pages they name. Malformed or unreadable `/PageLabels` are left alone rather than treated as an error.
+Known limits, deliberate: the structure tree (`/StructTreeRoot`) and article threads (`/Threads`) are not touched, so a file using them keeps the pages they name. In a tagged PDF, the structure tree can also go on referring to a pruned link, which then sits on no page (#30). Malformed or unreadable `/PageLabels` are left alone rather than treated as an error.
 
 ### Type Aliases
 ```python
