@@ -488,6 +488,21 @@ class StructTreeTest(unittest.TestCase):
             self.assertEqual(["first"], list(NameTree(root.IDTree).keys()))
             self.assertEqual(1, saved_page_objects(pdf))
 
+    def test_tolerates_malformed_parent_and_id_trees(self) -> None:
+        """A /ParentTree or /IDTree that cannot be read is left alone, not fatal."""
+        with make_pdf([A4, A4]) as pdf:
+            first = struct_elem(pdf, 0, page=pdf.pages[0].obj)
+            second = struct_elem(pdf, 0, page=pdf.pages[1].obj)
+            pdf.pages[1].StructParents = 0
+            root = set_struct_tree(pdf, [first, second], {})
+            root.ParentTree = pdf.make_indirect(Dictionary(Nums=Array([Dictionary(S=Name.D), 0])))
+            root.IDTree = pdf.make_indirect(Dictionary(Names=Array([Dictionary(), String("second")])))
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual(1, len(pdf.pages))
+            self.assertEqual([first.objgen], struct_kid_ids(root))
+
     def test_tolerates_a_null_in_the_id_tree(self) -> None:
         """A null /IDTree value does not stop the removal."""
         with make_pdf([A4, A4]) as pdf:
