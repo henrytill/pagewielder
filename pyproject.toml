@@ -1,10 +1,11 @@
 [build-system]
-requires = ["flit_core >=3.11,<4"]
-build-backend = "flit_core.buildapi"
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
 
 [project]
 name = "pagewielder"
-dynamic = ["version", "description"]
+description = "A tool for manipulating PDFs"
+dynamic = ["version"]
 readme = "README.md"
 authors = [{ name = "Henry Till", email = "henrytill@gmail.com" }]
 requires-python = ">=3.11"
@@ -17,6 +18,19 @@ types = []
 
 [project.scripts]
 pagewielder = "pagewielder.__main__:main"
+
+# version.py appends the git reference to the base version in VERSION; the hook writes the result into the package.
+[tool.hatch.version]
+source = "code"
+path = "version.py"
+
+[tool.hatch.build.hooks.version]
+path = "pagewielder/_version.py"
+template = '''"""The package version, written at build time."""
+
+# This file is auto-generated, do not edit by hand
+__version__ = "{version}"
+'''
 
 [tool.black]
 line-length = 120
@@ -39,4 +53,4 @@ disable = [
 ]
 
 [tool.pyright]
-strict = ["pagewielder", "tests"]
+strict = ["pagewielder", "tests", "version.py"]

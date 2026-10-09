@@ -11,13 +11,12 @@ from pathlib import Path
 PACKAGE_NAME = "pagewielder"
 TEST_DIR = "tests"
 VENV_DIR = "env"
-VERSION_FILE = "VERSION"
+VERSION_SCRIPT = "version.py"
 
 logger = logging.getLogger(__name__)
 
 
 class CommandType(Enum):
-    GENERATE = "generate"
     CREATE_ENV = "create-env"
     CHECK = "check"
     LINT = "lint"
@@ -46,43 +45,6 @@ def run(cmd: list[str], use_venv: bool = False):
         sys.exit(result.returncode)
 
 
-def generate(git_ref: str | None = None):
-    version_file = Path(VERSION_FILE)
-    if not version_file.exists():
-        logger.error(f"Version file {VERSION_FILE} not found")
-        sys.exit(1)
-
-    base_version = version_file.read_text().strip()
-    version = base_version
-
-    if git_ref is None:
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "--short", "HEAD"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if result.returncode == 0:
-                git_ref = result.stdout.strip()
-        except FileNotFoundError:
-            pass
-
-    if git_ref:
-        version = f"{base_version}+{git_ref}"
-
-    logger.info(f"Generated version: {version}")
-
-    init_file = Path(PACKAGE_NAME) / "__init__.py"
-    init_file.write_text(
-        f'''"""A tool for manipulating PDFs."""
-
-# This file is auto-generated, do not edit by hand
-__version__ = "{version}"
-'''
-    )
-
-
 def create_env():
     venv_path = Path(VENV_DIR)
     if venv_path.exists():
@@ -92,7 +54,6 @@ def create_env():
         sys.exit(1)
 
     logger.info("Creating new virtual environment...")
-    generate()
     venv.create(venv_path, with_pip=True)
 
     python = get_python(True)
@@ -106,7 +67,7 @@ def create_env():
 def check(use_venv: bool):
     logger.info("Running type checks...")
     run(
-        ["python3", "-m", "mypy", "--no-color-output", PACKAGE_NAME, TEST_DIR],
+        ["python3", "-m", "mypy", "--no-color-output", PACKAGE_NAME, TEST_DIR, VERSION_SCRIPT],
         use_venv=use_venv,
     )
 
@@ -114,13 +75,13 @@ def check(use_venv: bool):
 def lint(use_venv: bool):
     logger.info("Running linters...")
     run(["python3", "-m", "flake8", "--config", ".flake8"], use_venv=use_venv)
-    run(["python3", "-m", "pylint", PACKAGE_NAME, TEST_DIR], use_venv=use_venv)
+    run(["python3", "-m", "pylint", PACKAGE_NAME, TEST_DIR, VERSION_SCRIPT], use_venv=use_venv)
 
 
 def fmt(use_venv: bool):
     logger.info("Formatting code...")
-    run(["python3", "-m", "isort", PACKAGE_NAME, TEST_DIR], use_venv=use_venv)
-    run(["python3", "-m", "black", PACKAGE_NAME, TEST_DIR], use_venv=use_venv)
+    run(["python3", "-m", "isort", PACKAGE_NAME, TEST_DIR, VERSION_SCRIPT], use_venv=use_venv)
+    run(["python3", "-m", "black", PACKAGE_NAME, TEST_DIR, VERSION_SCRIPT], use_venv=use_venv)
 
 
 def test(use_venv: bool):
@@ -138,9 +99,6 @@ def main():
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    gen_parser = subparsers.add_parser(CommandType.GENERATE.value, help="Generate version file")
-    gen_parser.add_argument("-g", "--git-ref", help="Git reference for version")
-
     subparsers.add_parser(CommandType.CREATE_ENV.value, help="Create a new virtual environment")
     subparsers.add_parser(CommandType.CHECK.value, help="Run type checks")
     subparsers.add_parser(CommandType.LINT.value, help="Run linters")
@@ -157,8 +115,6 @@ def main():
     command = CommandType(args.command)
 
     match command:
-        case CommandType.GENERATE:
-            generate(args.git_ref)
         case CommandType.CREATE_ENV:
             create_env()
         case CommandType.CHECK:
