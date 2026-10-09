@@ -564,6 +564,10 @@ class _StructTreePruner:
             return None
         # pikepdf hands back an MCID as an int, whatever its stubs say.
         items: list[Object | int] = [*kids.as_list()] if isinstance(kids, Array) else [kids]
+        # An element that had no kids to begin with lost none to the removed
+        # pages, and is kept as one with no /K is.
+        if not items:
+            return None
         return _StructFrame(holder, page, items, iter(items), [])
 
     def _enter_element(self, kid: Dictionary) -> _StructFrame | None:
