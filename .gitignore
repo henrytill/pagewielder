@@ -5,3 +5,4 @@ __pycache__/
 *.pdf
 /result*
 /pagewielder/__init__.py
+CLAUDE.md
