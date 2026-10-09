@@ -12,10 +12,29 @@ import pikepdf
 from . import __version__, core
 from .core import Dimensions, Pages
 
-# Prompt strings used in the command-line interface.
+# Every message the commands print or raise lives here, so that tests can
+# match on it rather than on its text.  argparse's help text stays with the
+# argument it describes.
+
+# The dimension selection prompt.
 PROMPT_AVAILABLE_DIMENSIONS = "Available dimensions (width x height) and number of pages:"
+PROMPT_DIMENSIONS_CHOICE = "{index}: {width:.2f} x {height:.2f} ({count} pages)"
 PROMPT_SELECT_DIMENSIONS = "Select page sets to remove by index (comma-separated) or press Enter to cancel: "
 PROMPT_INVALID_INPUT = "Invalid input. Please enter valid indices separated by commas.\n"
+
+# Page range errors, raised by parse_page_range().
+MSG_INVALID_PAGE = "Invalid page number: {text}"
+MSG_PAGE_OUT_OF_RANGE = "Page {page} is out of range (1-{total})"
+MSG_START_TOO_LOW = "Start page {start} must be >= 1"
+MSG_END_TOO_HIGH = "End page {end} exceeds total pages ({total})"
+MSG_START_AFTER_END = "Start page {start} must be <= end page {end}"
+
+# Command output.
+MSG_ERROR = "Error: {error}"
+MSG_SAME_PATHS = "Input and output paths must be different."
+MSG_NOTHING_SELECTED = "No page sets selected. No output file created."
+MSG_FILTERED = "Filtered PDF saved as {path}"
+MSG_EXTRACTED = "Extracted {count} page{plural} ({start}:{end}) to {path}"
 
 
 def parse_page_range(page_range: str, total_pages: int) -> tuple[int, int]:
@@ -38,9 +57,9 @@ def parse_page_range(page_range: str, total_pages: int) -> tuple[int, int]:
         try:
             page = int(parts[0])
         except ValueError as e:
-            raise ValueError(f"Invalid page number: {parts[0]}") from e
+            raise ValueError(MSG_INVALID_PAGE.format(text=parts[0])) from e
         if page < 1 or page > total_pages:
-            raise ValueError(f"Page {page} is out of range (1-{total_pages})")
+            raise ValueError(MSG_PAGE_OUT_OF_RANGE.format(page=page, total=total_pages))
         return (page, page)
 
     # Range.  A split with maxsplit=1 yields no more than two parts.
@@ -50,11 +69,11 @@ def parse_page_range(page_range: str, total_pages: int) -> tuple[int, int]:
     end = total_pages if not end_str else int(end_str)
 
     if start < 1:
-        raise ValueError(f"Start page {start} must be >= 1")
+        raise ValueError(MSG_START_TOO_LOW.format(start=start))
     if end > total_pages:
-        raise ValueError(f"End page {end} exceeds total pages ({total_pages})")
+        raise ValueError(MSG_END_TOO_HIGH.format(end=end, total=total_pages))
     if start > end:
-        raise ValueError(f"Start page {start} must be <= end page {end}")
+        raise ValueError(MSG_START_AFTER_END.format(start=start, end=end))
 
     return (start, end)
 
@@ -80,7 +99,7 @@ def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> set[Dimen
     for i, dimensions in choices.items():
         width, height = dimensions
         num_pages = len(dimensions_to_pages[dimensions])
-        print(f"{i}: {width:.2f} x {height:.2f} ({num_pages} pages)")
+        print(PROMPT_DIMENSIONS_CHOICE.format(index=i, width=width, height=height, count=num_pages))
 
     while True:
         user_input = input(PROMPT_SELECT_DIMENSIONS)
@@ -109,7 +128,7 @@ def _resolve_output_path(input_path: Path, output: Path | None) -> Path | None:
             output = Path(tmpfile.name)
 
     if input_path == output:
-        print("Input and output paths must be different.", file=sys.stderr)
+        print(MSG_SAME_PATHS, file=sys.stderr)
         return None
 
     return output
@@ -135,7 +154,7 @@ def filter_command(args: Namespace) -> int:
         maybe_selected_dimensions = select_dimensions(dimensions_to_pages)
 
         if maybe_selected_dimensions is None:
-            print("No page sets selected. No output file created.", file=sys.stderr)
+            print(MSG_NOTHING_SELECTED, file=sys.stderr)
             return 1
 
         selected_pages: Pages = set()
@@ -145,7 +164,7 @@ def filter_command(args: Namespace) -> int:
         core.remove_pages(input_pdf, selected_pages)
         input_pdf.save(output_path)
 
-    print(f"Filtered PDF saved as {output_path}")
+    print(MSG_FILTERED.format(path=output_path))
 
     return 0
 
@@ -171,7 +190,7 @@ def excerpt_command(args: Namespace) -> int:
         try:
             start_page, end_page = parse_page_range(args.pages, total_pages)
         except ValueError as e:
-            print(f"Error: {e}", file=sys.stderr)
+            print(MSG_ERROR.format(error=e), file=sys.stderr)
             return 1
 
         outside_range = set(range(1, start_page)) | set(range(end_page + 1, total_pages + 1))
@@ -179,7 +198,8 @@ def excerpt_command(args: Namespace) -> int:
         input_pdf.save(output_path)
 
     page_count = end_page - start_page + 1
-    print(f"Extracted {page_count} page{'s' if page_count != 1 else ''} ({start_page}:{end_page}) to {output_path}")
+    plural = "s" if page_count != 1 else ""
+    print(MSG_EXTRACTED.format(count=page_count, plural=plural, start=start_page, end=end_page, path=output_path))
 
     return 0
 
