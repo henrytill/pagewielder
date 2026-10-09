@@ -58,9 +58,8 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
   - `map_dimensions_to_pages()`: Groups page numbers by page dimensions, reading each page's
     size through `_get_dimensions()`, which measures the mediabox with pikepdf's `Rectangle`.
   - `remove_pages()`: Removes pages in place, keeping the rest of the document consistent (see below).
-  - Private helpers cover the bookkeeping: `_page_labels()` / `_set_page_labels()` for `/PageLabels`, with `_continues()` deciding where one range carries on into the next; `_prune_outline_items()` for the outline; `_stale_links()` / `_delete_links()` for link annotations; `_stale_destinations()` / `_delete_destinations()` for document-level destinations.
-  - `_Resolver` answers the question every pruner asks, whether a target resolves to a removed page, through `targets_removed()`. It holds the `/Names /Dests` tree from `_dests_name_tree()`, built once per call, and follows names and `/GoTo` actions.
-  - `remove_pages()` runs in two phases: everything that resolves a target (the `_stale_*()` finders, and the outline, pruned as it is resolved since nothing else reads it), then the `_delete_*()` steps. A target may be reached through a named destination that is about to be deleted, so a new pruner finds what to delete in the first phase and deletes it in the second.
+  - Private helpers cover the bookkeeping: `_page_labels()` / `_set_page_labels()` for `/PageLabels`, with `_continues()` deciding where one range carries on into the next; `_prune_outline_items()` for the outline; `_prune_links()` for link annotations; `_prune_destinations()` for document-level destinations.
+  - `_Resolver` answers the question every pruner asks, whether a target resolves to a removed page, through `targets_removed()`, following names and `/GoTo` actions. It reads `/Root /Dests` and the `/Names /Dests` tree (from `_dests_name_tree()`, built once per call) when it is made, so a pruner deleting a stale named destination cannot change how another target resolves, and the pruners run in any order.
   - Uses pikepdf's `Page`, `Rectangle`, `NameTree`, `NumberTree` and outline APIs.
 
 - **pagewielder/cli.py**: Command-line interface.
@@ -86,7 +85,7 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
 
 - **Outline**: items pointing at a removed page are dropped and replaced by their children. Destinations are followed through named destinations (`/Root /Dests` and the `/Root /Names /Dests` name tree) and through `/GoTo` actions, in any order, bounded by `_MAX_DESTINATION_HOPS`.
 - **Destinations**: stale entries in `/Root /Dests`, the `/Root /Names /Dests` tree, and `/Root /OpenAction` are deleted, which also stops the removed page objects from being written back out.
-- **Links**: `/Link` annotations on the remaining pages whose `/Dest` or `/GoTo` action resolves to a removed page are deleted outright, not left as inert clickable regions. Links are resolved before any destination is deleted, since resolving one may need a named destination that is about to go.
+- **Links**: `/Link` annotations on the remaining pages whose `/Dest` or `/GoTo` action resolves to a removed page are deleted outright, not left as inert clickable regions. A link reaching its page through a named destination is resolved through the resolver's copy, so it is pruned even though the name is deleted too.
 - **`/PageLabels`**: each surviving page keeps its label, and the ranges are rebuilt against the new indices, merging ranges that run on.
 
 Known limits, deliberate: the structure tree (`/StructTreeRoot`) and article threads (`/Threads`) are not touched, so a file using them keeps the pages they name. In a tagged PDF, the structure tree can also go on referring to a pruned link, which then sits on no page (#30). Malformed or unreadable `/PageLabels` are left alone rather than treated as an error.
