@@ -60,8 +60,9 @@ def parse_page_range(page_range: str, total_pages: int) -> tuple[int, int]:
 
 
 def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> set[Dimensions] | None:
-    """Prompt the user to one or more dimensions from a list of dimensions and
-    the corresponding number of pages.
+    """Prompt the user to select one or more dimensions to remove.
+
+    Each dimension is listed with the number of pages that have it.
 
     Args:
         dimensions_to_pages: A dictionary mapping dimensions to the set of

@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 dependencies = ["pikepdf>=7.1.2"]
 
 [project.optional-dependencies]
-dev = ["mypy>=1.8.0", "pylint>=2.17", "ruff>=0.6.0"]
+dev = ["mypy>=1.8.0", "ruff>=0.6.0"]
 
 [project.scripts]
 pagewielder = "pagewielder.__main__:main"
@@ -27,21 +27,17 @@ path = "version.py"
 line-length = 120
 
 [tool.ruff.lint]
-# flake8's checks (pycodestyle and pyflakes), plus isort's.
-select = ["E", "W", "F", "I"]
+# flake8's checks (pycodestyle and pyflakes), isort's, pylint's and pydocstyle's.
+select = ["E", "W", "F", "I", "PL", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.mypy]
 strict = true
 files = ["pagewielder", "tests", "version.py"]
 check_untyped_defs = true
 warn_redundant_casts = false
-
-[tool.pylint]
-max-line-length = 120
-disable = [
-    "C0301", # line-too-long, we use ruff for formatting
-    "C0414", # useless-import-alias, we use aliases for type checking
-]
 
 [tool.pyright]
 # The same sources as mypy's files; without them pyright walks the whole tree, ./result's installed copy included.
