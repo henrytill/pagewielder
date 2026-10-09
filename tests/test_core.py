@@ -1,6 +1,7 @@
 """Tests for pagewielder.core."""
 
 import io
+import sys
 import unittest
 from collections.abc import Sequence
 
@@ -385,6 +386,21 @@ class StructTreeTest(unittest.TestCase):
             self.assertEqual([Name.MCR], [kid.Type for kid in elem.K.as_list()])
             self.assertFalse(Name.Pg in elem)
             self.assertEqual(1, saved_page_objects(pdf))
+
+    def test_prunes_a_tree_deeper_than_the_recursion_limit(self) -> None:
+        """A tree nested deeper than Python's stack allows is pruned, not given up on."""
+        depth = sys.getrecursionlimit() * 2
+        with make_pdf([A4, A4]) as pdf:
+            kept = struct_elem(pdf, 0, page=pdf.pages[0].obj)
+            dropped = struct_elem(pdf, 0, page=pdf.pages[1].obj)
+            for _ in range(depth):
+                kept = struct_elem(pdf, kept)
+                dropped = struct_elem(pdf, dropped)
+            set_struct_tree(pdf, [kept, dropped], {})
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([kept.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
 
     def test_prunes_the_id_tree(self) -> None:
         """A dropped element leaves /IDTree."""
