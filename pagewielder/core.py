@@ -427,12 +427,7 @@ def _prune_destinations(resolver: _Resolver) -> None:
 
 
 class _StructTreePruner:
-    """Walks a structure tree, dropping what belongs to removed pages or pruned links.
-
-    Attributes:
-        stale_keys: The ``/ParentTree`` keys of what was removed.
-        dropped: Object identifiers of the elements dropped.
-    """
+    """Walks a structure tree, dropping what belongs to removed pages or pruned links."""
 
     def __init__(self, resolver: _Resolver) -> None:
         """Set up a pruner.
@@ -440,21 +435,16 @@ class _StructTreePruner:
         Args:
             resolver: The resolver for this remove_pages() call.
         """
-        self.resolver = resolver
-        self.stale_keys: set[int] = set()
-        self.dropped: set[_ObjGen] = set()
-        self._visited: set[_ObjGen] = set()
+        self._resolver = resolver
+        # Whether each indirect element reached was kept.  An element is
+        # entered as kept, so that a malformed tree looping back to it ends
+        # there, and one reached twice is decided once.
+        self._kept: dict[_ObjGen, bool] = {}
 
-    def add_stale_key(self, obj: Object | None, key: Name) -> None:
-        """Note obj's ``/ParentTree`` key as stale, if it has one.
-
-        Args:
-            obj: A page or annotation.
-            key: ``/StructParents`` for a page, ``/StructParent`` for an annotation.
-        """
-        number = obj.get(key) if isinstance(obj, Dictionary) else None
-        if isinstance(number, int):
-            self.stale_keys.add(number)
+    @property
+    def dropped(self) -> set[_ObjGen]:
+        """Object identifiers of the indirect elements dropped."""
+        return {objgen for objgen, kept in self._kept.items() if not kept}
 
     def prune_kids(self, holder: Dictionary, page: Object | None) -> bool:
         """Drop the kids of holder that belong to removed pages or pruned links.
@@ -478,41 +468,67 @@ class _StructTreePruner:
     def _keep_kid(self, kid: Object | int, page: Object | None) -> bool:
         # A kid without a /Pg of its own is on its element's page.
         if isinstance(kid, int):
-            return not self.resolver.is_removed(page)
+            return not self._resolver.is_removed(page)
         if not isinstance(kid, Dictionary):
             return True
         kind = kid.get(Name.Type)
         if kind == Name.MCR:
-            return not self.resolver.is_removed(kid.get(Name.Pg, page))
+            return not self._resolver.is_removed(kid.get(Name.Pg, page))
         if kind == Name.OBJR:
             return self._keep_object_reference(kid, page)
         return self._keep_element(kid)
 
     def _keep_object_reference(self, objr: Dictionary, page: Object | None) -> bool:
-        if self.resolver.is_removed(objr.get(Name.Pg, page)):
+        if self._resolver.is_removed(objr.get(Name.Pg, page)):
             return False
         annot = objr.get(Name.Obj)
         if not isinstance(annot, Dictionary):
             return True
-        return not (self.resolver.is_removed(annot.get(Name.P)) or self.resolver.is_stale_link(annot))
+        return not (self._resolver.is_removed(annot.get(Name.P)) or self._resolver.is_stale_link(annot))
 
     def _keep_element(self, elem: Dictionary) -> bool:
-        # An element reached twice, by a malformed tree sharing or looping
-        # back to it, is decided once.
         if elem.is_indirect:
-            if elem.objgen in self._visited:
-                return elem.objgen not in self.dropped
-            self._visited.add(elem.objgen)
+            if elem.objgen in self._kept:
+                return self._kept[elem.objgen]
+            self._kept[elem.objgen] = True
         page = elem.get(Name.Pg)
         if not self.prune_kids(elem, page):
             if elem.is_indirect:
-                self.dropped.add(elem.objgen)
+                self._kept[elem.objgen] = False
             return False
         # Whatever named this page through the element has just gone, and
         # the /Pg would otherwise keep the page in the file.
-        if self.resolver.is_removed(page):
+        if self._resolver.is_removed(page):
             del elem.Pg
         return True
+
+
+def _stale_parent_tree_keys(resolver: _Resolver) -> set[int]:
+    """Find the ``/ParentTree`` keys of what remove_pages() removes.
+
+    They are keyed by what goes: the removed pages, by ``/StructParents``,
+    and their annotations and the links pruned from the remaining pages, by
+    ``/StructParent``.
+
+    Args:
+        resolver: The resolver for this remove_pages() call.
+
+    Returns:
+        The keys whose entries are to go.
+    """
+    owners: list[tuple[Object, Name]] = []
+    for page in resolver.removed_pages:
+        owners.append((page, Name.StructParents))
+        annots = page.get(Name.Annots)
+        if isinstance(annots, Array):
+            owners += [(annot, Name.StructParent) for annot in annots.as_list()]
+    owners += [(annot, Name.StructParent) for annot in resolver.stale_links]
+    keys: set[int] = set()
+    for owner, key in owners:
+        number = owner.get(key) if isinstance(owner, Dictionary) else None
+        if isinstance(number, int):
+            keys.add(number)
+    return keys
 
 
 def _prune_struct_tree(resolver: _Resolver) -> None:
@@ -538,30 +554,22 @@ def _prune_struct_tree(resolver: _Resolver) -> None:
         return
 
     pruner = _StructTreePruner(resolver)
+    # Whether anything is left does not matter here: an empty root stays.
     pruner.prune_kids(root, None)
+    dropped = pruner.dropped
 
-    # The entries to drop are keyed by what goes: the removed pages, their
-    # annotations, and the links pruned from the remaining pages.
-    for page in resolver.removed_pages:
-        pruner.add_stale_key(page, Name.StructParents)
-        annots = page.get(Name.Annots)
-        if isinstance(annots, Array):
-            for annot in annots.as_list():
-                pruner.add_stale_key(annot, Name.StructParent)
-    for annot in resolver.stale_links:
-        pruner.add_stale_key(annot, Name.StructParent)
-
+    stale_keys = _stale_parent_tree_keys(resolver)
     parent_tree = root.get(Name.ParentTree)
-    if isinstance(parent_tree, Dictionary) and pruner.stale_keys:
+    if isinstance(parent_tree, Dictionary) and stale_keys:
         numbers = NumberTree(_tree_object(pdf, parent_tree))
         root.ParentTree = numbers.obj
-        for number in pruner.stale_keys:
+        for number in stale_keys:
             del numbers[number]
 
     id_tree = root.get(Name.IDTree)
-    if isinstance(id_tree, Dictionary) and pruner.dropped:
+    if isinstance(id_tree, Dictionary) and dropped:
         ids = NameTree(_tree_object(pdf, id_tree))
-        stale_ids = [name for name, elem in ids.items() if elem.objgen in pruner.dropped]
+        stale_ids = [name for name, elem in ids.items() if elem.objgen in dropped]
         if stale_ids:
             root.IDTree = ids.obj
         for name in stale_ids:
