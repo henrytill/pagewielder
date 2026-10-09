@@ -1,6 +1,7 @@
 """Core functionality for pagewielder."""
 
 import collections
+import contextlib
 import typing
 from decimal import Decimal
 
@@ -362,7 +363,11 @@ def _prune_destinations(pdf: Pdf, removed: set[_ObjGen]) -> None:
         # the tree it had.
         pdf.Root.Names[Name.Dests] = name_tree.obj
         for name in stale_names:
-            del name_tree[name]
+            # NameTree finds a name by binary search, which misses entries in
+            # a tree whose names are out of order.  Such a tree breaks the
+            # spec, and keeping its stale entry beats removing no pages.
+            with contextlib.suppress(KeyError):
+                del name_tree[name]
 
     if stale_open_action:
         del pdf.Root[Name.OpenAction]
