@@ -233,6 +233,9 @@ class _Resolver:
         Returns:
             The destination the name resolves to, or None if it cannot be found.
         """
+        # Not cached: each hop is a dict lookup in the copies, about what a
+        # cache lookup would cost, and a cache would need keys that keep a
+        # Name and a String of the same text apart.
         return (self._dests if isinstance(name, Name) else self._names).get(str(name))
 
     def _destination_page(self, dest: Object | int | None) -> Dictionary | None:
@@ -352,6 +355,8 @@ def _prune_destinations(resolver: _Resolver) -> None:
     """
     root = resolver.pdf.Root
 
+    # Read again rather than taken from the resolver, which holds a copy of
+    # the entries: the deletions have to reach the dictionary itself.
     dests = root.get(Name.Dests)
     if isinstance(dests, Dictionary):
         for key in [key for key in dests.keys() if resolver.targets_removed(dests[key])]:
