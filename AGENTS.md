@@ -36,9 +36,9 @@ version from the `VERSION` file and appends the git reference: `PAGEWIELDER_GIT_
 `git rev-parse --short HEAD`, otherwise nothing.  The result looks like `0.1.0+ac0c2e6`.  `flake.nix` reads
 `VERSION` too.
 
-Hatchling's version build hook writes the result to `pagewielder/_version.py`, which is gitignored and re-exported by
-`pagewielder/__init__.py`.  Any build writes it, including the editable install `create-env` does, so in a checkout
-it holds the hash from the last install rather than the current HEAD.
+The result goes into the package metadata, and `pagewielder/__init__.py` reads `__version__` from there with
+`importlib.metadata`, falling back to `unknown` when the package isn't installed.  An editable install records the
+version when it is made, so in a checkout it reports the hash from the last `create-env` rather than the current HEAD.
 
 ### Running the Application
 ```bash

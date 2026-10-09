@@ -19,18 +19,11 @@ types = []
 [project.scripts]
 pagewielder = "pagewielder.__main__:main"
 
-# version.py appends the git reference to the base version in VERSION; the hook writes the result into the package.
+# version.py appends the git reference to the base version in VERSION.  The result goes into the package metadata,
+# where pagewielder/__init__.py reads it, rather than into a generated file the type checkers would need to exist.
 [tool.hatch.version]
 source = "code"
 path = "version.py"
-
-[tool.hatch.build.hooks.version]
-path = "pagewielder/_version.py"
-template = '''"""The package version, written at build time."""
-
-# This file is auto-generated, do not edit by hand
-__version__ = "{version}"
-'''
 
 [tool.black]
 line-length = 120
