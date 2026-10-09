@@ -1,8 +1,8 @@
 """Shared helpers for the pagewielder tests."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
-from pikepdf import Array, Dictionary, Name, NumberTree, Object, Pdf
+from pikepdf import Array, Dictionary, Name, NameTree, NumberTree, Object, Pdf
 
 A4 = (595.0, 842.0)
 PLATE = (1000.0, 700.0)
@@ -45,6 +45,19 @@ def count_page_objects(pdf: Pdf) -> int:
 def annotation_ids(pdf: Pdf, index: int) -> list[tuple[int, int]]:
     """List the object identifiers of the annotations on the page at a 0-based index."""
     return [annot.objgen for annot in pdf.pages[index].Annots.as_list()]
+
+
+def set_named_destinations(pdf: Pdf, dests: Mapping[str, Object]) -> None:
+    """Give a PDF a /Root /Names /Dests name tree holding the given destinations."""
+    tree = NameTree.new(pdf)
+    for name, dest in dests.items():
+        tree[name] = dest
+    pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=tree.obj))
+
+
+def named_destinations(pdf: Pdf) -> list[str]:
+    """List the names in a PDF's /Root /Names /Dests name tree."""
+    return [str(name) for name in NameTree(pdf.Root.Names.Dests).keys()]
 
 
 def set_page_labels(pdf: Pdf, nums: Sequence[int | Dictionary]) -> None:
