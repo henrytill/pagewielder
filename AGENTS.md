@@ -64,8 +64,8 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
 - **pagewielder/cli.py**: Command-line interface.
   - Two commands: `filter` (interactive dimension selection) and `excerpt` (page range extraction).
   - `parse_page_range()`: Handles the page range syntax above.
-  - `select_dimensions()`: Interactive prompt for dimension-based filtering.  Indices are
-    range-checked by hand, so a negative one is rejected rather than counting from the end.  Its
+  - `select_dimensions()`: Interactive prompt for dimension-based filtering.  Answers are looked
+    up by the labels it prints, not used as list indices, so a negative one is rejected.  Its
     prompt strings are module constants (`PROMPT_*`); the tests drive it by patching `input` and
     match on those constants rather than on literal text.
   - `_resolve_output_path()`: Shared by both commands; allocates the temporary file and rejects an output equal to the input.

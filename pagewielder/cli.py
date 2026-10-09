@@ -71,11 +71,13 @@ def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> set[Dimen
     Returns:
         A set of dimensions to remove or None if the user cancels.
     """
-    dimensions_list = list(dimensions_to_pages.keys())
+    # Keyed by the label shown for each set, so that only those labels select
+    # anything: indexing a list would also accept a negative index.
+    choices = dict(enumerate(dimensions_to_pages))
 
     print(PROMPT_AVAILABLE_DIMENSIONS)
 
-    for i, dimensions in enumerate(dimensions_list):
+    for i, dimensions in choices.items():
         width, height = dimensions
         num_pages = len(dimensions_to_pages[dimensions])
         print(f"{i}: {width:.2f} x {height:.2f} ({num_pages} pages)")
@@ -85,15 +87,9 @@ def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> set[Dimen
         if not user_input:
             return None
         try:
-            indices = {int(index) for index in user_input.split(",")}
-        except ValueError:
+            return {choices[int(index)] for index in user_input.split(",")}
+        except (ValueError, KeyError):
             print(PROMPT_INVALID_INPUT)
-            continue
-        # Checked by hand rather than left to IndexError, since a negative
-        # index would quietly select from the end of the list.
-        if all(0 <= index < len(dimensions_list) for index in indices):
-            return {dimensions_list[index] for index in indices}
-        print(PROMPT_INVALID_INPUT)
 
 
 def _resolve_output_path(input_path: Path, output: Path | None) -> Path | None:
