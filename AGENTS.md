@@ -68,10 +68,11 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
   - `select_dimensions()`: Interactive prompt for dimension-based filtering.  Answers are looked
     up by the labels it prints, not used as list indices, so a negative one is rejected.  The
     tests drive it by patching `input`.
-  - Every message the commands print or raise is a module constant: `PROMPT_*` for the dimension
-    prompt, `MSG_*` for the rest, with `str.format` fields where a message carries values.  Tests
-    match on these constants rather than on literal text.  argparse's help text is the exception
-    and stays with its `add_argument` call.
+  - Every user-facing message is a module constant: `PROMPT_*` for everything
+    `select_dimensions()` prints, `MSG_*` for the rest, with `str.format` fields where a message
+    carries values.  Tests match on these constants rather than on literal text.  argparse's own
+    strings (help, version) stay with the parser, and errors that only signal a bug, such as the
+    `TypeError`s in `main()`, stay inline.
   - `_resolve_output_path()`: Shared by both commands; allocates the temporary file and rejects an output equal to the input.
   - `main()` takes an optional argument sequence and returns an exit code, so it can be driven
     directly.  The current tests call the `*_command` functions with a hand-built `Namespace`

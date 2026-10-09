@@ -12,11 +12,11 @@ import pikepdf
 from . import __version__, core
 from .core import Dimensions, Pages
 
-# Every message the commands print or raise lives here, so that tests can
-# match on it rather than on its text.  argparse's help text stays with the
-# argument it describes.
+# Every user-facing message lives here, so that tests can match on it rather
+# than on its text.  argparse's own strings, help and version, stay with the
+# parser they configure, and errors that only signal a bug stay inline.
 
-# The dimension selection prompt.
+# Everything select_dimensions() prints.
 PROMPT_AVAILABLE_DIMENSIONS = "Available dimensions (width x height) and number of pages:"
 PROMPT_DIMENSIONS_CHOICE = "{index}: {width:.2f} x {height:.2f} ({count} pages)"
 PROMPT_SELECT_DIMENSIONS = "Select page sets to remove by index (comma-separated) or press Enter to cancel: "
