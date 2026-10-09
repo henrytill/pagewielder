@@ -705,18 +705,24 @@ def _prune_struct_tree(resolver: _Resolver) -> None:
     dropped = pruner.dropped
 
     stale_keys = _stale_parent_tree_keys(resolver)
+    # Reading a tree is where a malformed one gives out.  It is then left as
+    # it is, as unreadable /PageLabels are: a file whose tree we cannot prune
+    # is still a file whose pages we can remove.
     parent_tree = root.get(Name.ParentTree)
     if isinstance(parent_tree, Dictionary):
         numbers = NumberTree(_tree_object(pdf, parent_tree))
-        # An entry naming only dropped elements goes too, whatever its key
-        # belongs to: a form XObject drawn on a removed page, say.
-        stale_keys |= {number for number, value in numbers.items() if _names_only_dropped(value, dropped)}
-        _delete_from_tree(root, Name.ParentTree, numbers, stale_keys)
+        with contextlib.suppress(PdfError):
+            # An entry naming only dropped elements goes too, whatever its
+            # key belongs to: a form XObject drawn on a removed page, say.
+            stale_keys |= {number for number, value in numbers.items() if _names_only_dropped(value, dropped)}
+            _delete_from_tree(root, Name.ParentTree, numbers, stale_keys)
 
     id_tree = root.get(Name.IDTree)
     if isinstance(id_tree, Dictionary) and dropped:
         ids = NameTree(_tree_object(pdf, id_tree))
-        _delete_from_tree(root, Name.IDTree, ids, [name for name, elem in ids.items() if _indirect_id(elem) in dropped])
+        with contextlib.suppress(PdfError):
+            stale_ids = [name for name, elem in ids.items() if _indirect_id(elem) in dropped]
+            _delete_from_tree(root, Name.IDTree, ids, stale_ids)
 
 
 def remove_pages(pdf: Pdf, pages: Pages) -> None:
