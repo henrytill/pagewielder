@@ -23,9 +23,9 @@ nix flake check                            # Build and test the package, and run
 Without Nix, `pip install -e '.[dev]'` installs the Python tools from PyPI, to run by hand; there is no hook
 configuration outside the dev shell.
 
-The hooks are nixfmt, black, isort, flake8 and pylint on the changed files, and mypy and pyright on the whole project,
-which both take what to check from `pyproject.toml`.  pylint, mypy and pyright run against `lintEnv`, a Python with
-pikepdf, since the hooks' own tools see no third-party packages otherwise.
+The hooks are nixfmt, ruff (lint, with `--fix`), ruff-format and pylint on the changed files, and mypy and pyright on
+the whole project, which both take what to check from `pyproject.toml`.  pylint, mypy and pyright run against
+`lintEnv`, a Python with pikepdf, since the hooks' own tools see no third-party packages otherwise.
 
 ### Version Generation
 
@@ -96,11 +96,11 @@ Uses hatchling for building. The package can also be built with Nix (see `flake.
 - Python >=3.11 required
 - Version from `version.py` (see Version Generation); description is static
 - Single runtime dependency: pikepdf >=7.1.2
-- Dev dependencies (`.[dev]`): black, flake8, isort, mypy, pylint
+- Dev dependencies (`.[dev]`): mypy, pylint, ruff
 - Console script: `pagewielder = "pagewielder.__main__:main"`
 - The package ships `py.typed`
 
-Tool settings live in `pyproject.toml` and `.flake8`; see Code Style below for what they amount to.
+Tool settings live in `pyproject.toml`; see Code Style below for what they amount to.
 
 ### Nix Build
 ```bash
@@ -129,9 +129,9 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs `nix flake check` on p
 
 ## Code Style
 
-- Max line length: 120 characters, set for black, isort, pylint and flake8 alike
-- Black formatting with isort for imports
+- Max line length: 120 characters, set for ruff and pylint alike
+- `ruff format` formatting (black's style), with ruff's isort rules for imports
 - Type hints required: mypy strict over `pagewielder`, `tests` and `version.py`, pyright strict over the same
-- flake8 ignores E203 (whitespace before ':') and F401 in `__init__.py`; pylint disables C0301 (line-too-long, black's job) and C0414 (useless-import-alias)
+- ruff selects pycodestyle (E, W), pyflakes (F) and isort (I); pylint disables C0301 (line-too-long, ruff's job) and C0414 (useless-import-alias)
 - Google-style docstrings with Args/Returns/Raises on public and private functions alike
 - Comments explain why a case is handled, not what the line does; the existing code is the reference for tone

@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 dependencies = ["pikepdf>=7.1.2"]
 
 [project.optional-dependencies]
-dev = ["black>=23.3.0", "flake8>=6.0.0", "isort>=5.13.2", "mypy>=1.8.0", "pylint>=2.17"]
+dev = ["mypy>=1.8.0", "pylint>=2.17", "ruff>=0.6.0"]
 
 [project.scripts]
 pagewielder = "pagewielder.__main__:main"
@@ -23,8 +23,12 @@ pagewielder = "pagewielder.__main__:main"
 source = "code"
 path = "version.py"
 
-[tool.black]
+[tool.ruff]
 line-length = 120
+
+[tool.ruff.lint]
+# flake8's checks (pycodestyle and pyflakes), plus isort's.
+select = ["E", "W", "F", "I"]
 
 [tool.mypy]
 strict = true
@@ -32,15 +36,10 @@ files = ["pagewielder", "tests", "version.py"]
 check_untyped_defs = true
 warn_redundant_casts = false
 
-[tool.isort]
-profile = "black"
-known_first_party = ["pagewielder"]
-line_length = 120
-
 [tool.pylint]
 max-line-length = 120
 disable = [
-    "C0301", # line-too-long, we use black for formatting
+    "C0301", # line-too-long, we use ruff for formatting
     "C0414", # useless-import-alias, we use aliases for type checking
 ]
 
