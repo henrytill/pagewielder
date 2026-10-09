@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 dependencies = ["pikepdf>=7.1.2"]
 
 [project.optional-dependencies]
-dev = ["mypy>=1.8.0", "ruff>=0.6.0"]
+dev = ["mypy>=1.8.0", "pyright>=1.1.350", "ruff>=0.6.0"]
 
 [project.scripts]
 pagewielder = "pagewielder.__main__:main"

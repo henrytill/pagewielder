@@ -96,7 +96,7 @@ Uses hatchling for building. The package can also be built with Nix (see `flake.
 - Python >=3.11 required
 - Version from `version.py` (see Version Generation); description is static
 - Single runtime dependency: pikepdf >=7.1.2
-- Dev dependencies (`.[dev]`): mypy, ruff
+- Dev dependencies (`.[dev]`): mypy, pyright, ruff
 - Console script: `pagewielder = "pagewielder.__main__:main"`
 - The package ships `py.typed`
 
