@@ -200,9 +200,9 @@ class _Resolver:
     deleting a stale one later cannot change how anything else resolves.
     The pruners can therefore run, and delete as they go, in any order.
 
+    ``pdf`` and ``removed`` are kept as given to ``__init__``.
+
     Attributes:
-        pdf: The PDF file the targets belong to.
-        removed: Object identifiers of the removed page objects.
         name_tree: The ``/Names /Dests`` name tree, or None if the file has
             none.  It is built once, since over a direct tree that means
             copying the tree.
