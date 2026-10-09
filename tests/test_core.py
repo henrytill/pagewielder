@@ -6,7 +6,7 @@ import unittest
 from collections.abc import Sequence
 
 import pikepdf
-from pikepdf import Array, Dictionary, Name, NameTree, OutlineItem, String
+from pikepdf import Array, Dictionary, Name, NameTree, OutlineItem, Stream, String
 
 from pagewielder import core
 from tests.helpers import (
@@ -418,6 +418,23 @@ class StructTreeTest(unittest.TestCase):
             self.assertEqual([elem.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
             self.assertEqual([Name.MCR], [kid.Type for kid in elem.K.as_list()])
             self.assertFalse(Name.Pg in elem)
+            self.assertEqual(1, saved_page_objects(pdf))
+
+    def test_drops_an_element_still_named_by_a_form_xobject(self) -> None:
+        """A dropped element named by a form XObject's /ParentTree entry keeps no removed page."""
+        with make_pdf([A4, A4]) as pdf:
+            form = pdf.make_indirect(Stream(pdf, b""))
+            form.stream_dict = Dictionary(
+                Type=Name.XObject, Subtype=Name.Form, BBox=Array([0, 0, 10, 10]), StructParents=5
+            )
+            pdf.pages[1].Resources = Dictionary(XObject=Dictionary(Fm0=form))
+            mcr = Dictionary(Type=Name.MCR, Pg=pdf.pages[1].obj, Stm=form, MCID=0)
+            elem = struct_elem(pdf, mcr, page=pdf.pages[1].obj)
+            set_struct_tree(pdf, [elem], {5: Array([elem])})
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([], struct_kid_ids(pdf.Root.StructTreeRoot))
             self.assertEqual(1, saved_page_objects(pdf))
 
     def test_prunes_a_tree_deeper_than_the_recursion_limit(self) -> None:
