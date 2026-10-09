@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 
-from pikepdf import Array, Dictionary, NumberTree, Pdf
+from pikepdf import Array, Dictionary, Name, NumberTree, Object, Pdf
 
 A4 = (595.0, 842.0)
 PLATE = (1000.0, 700.0)
@@ -20,6 +20,31 @@ def outline_titles(pdf: Pdf) -> list[str]:
     """List the titles of the top-level outline items of a PDF."""
     with pdf.open_outline() as outline:
         return [item.title for item in outline.root]
+
+
+def link(pdf: Pdf, dest: Object | None = None, action: Object | None = None) -> Object:
+    """Build an indirect link annotation targeting a destination or an action."""
+    annot = Dictionary(Type=Name.Annot, Subtype=Name.Link, Rect=Array([0, 0, 10, 10]))
+    if dest is not None:
+        annot.Dest = dest
+    if action is not None:
+        annot.A = action
+    return pdf.make_indirect(annot)
+
+
+def set_annotations(pdf: Pdf, index: int, annots: Sequence[Object]) -> None:
+    """Give the page at a 0-based index an indirect /Annots array."""
+    pdf.pages[index].Annots = pdf.make_indirect(Array(annots))
+
+
+def count_page_objects(pdf: Pdf) -> int:
+    """Count the /Page objects in a PDF, whether or not the page tree holds them."""
+    return len([o for o in pdf.objects if isinstance(o, Dictionary) and o.get(Name.Type) == Name.Page])
+
+
+def annotation_ids(pdf: Pdf, index: int) -> list[tuple[int, int]]:
+    """List the object identifiers of the annotations on the page at a 0-based index."""
+    return [annot.objgen for annot in pdf.pages[index].Annots.as_list()]
 
 
 def set_page_labels(pdf: Pdf, nums: Sequence[int | Dictionary]) -> None:
