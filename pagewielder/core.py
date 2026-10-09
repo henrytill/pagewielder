@@ -3,6 +3,7 @@
 import collections
 import contextlib
 import typing
+from collections.abc import Collection
 from decimal import Decimal
 
 from pikepdf import (
@@ -182,13 +183,42 @@ def _tree_object(pdf: Pdf, tree: Dictionary) -> Object:
 
     Returns:
         The tree itself if it is indirect, or else an indirect copy of it,
-        which has to be put in its place for changes to reach the file.
+        which ``_delete_from_tree()`` puts in its place.
     """
     # A tree wrapper needs an indirect object, which a file writing its tree
     # into a direct dictionary does not give us.  make_indirect() would
     # convert the tree where it stands, so it is given a copy, and reading
     # the tree leaves the document as it was.
     return tree if tree.is_indirect else pdf.make_indirect(tree.copy())
+
+
+@typing.overload
+def _delete_from_tree(holder: Object, key: Name, tree: NameTree, stale: Collection[str | bytes]) -> None: ...
+@typing.overload
+def _delete_from_tree(holder: Object, key: Name, tree: NumberTree, stale: Collection[int]) -> None: ...
+def _delete_from_tree(holder: Object, key: Name, tree: NameTree | NumberTree, stale: Collection[typing.Any]) -> None:
+    """Delete entries from a tree wrapped over ``_tree_object()``.
+
+    The tree may wrap an indirect copy of a direct one, which has to take
+    its place for the deletions to reach the file.  It is put back only
+    when something is deleted, so a file with nothing to prune keeps the
+    tree it had.
+
+    Args:
+        holder: The dictionary holding the tree.
+        key: The key the tree is held under.
+        tree: The tree.
+        stale: The keys of the entries to delete.
+    """
+    if not stale:
+        return
+    holder[key] = tree.obj
+    for name in stale:
+        # A tree finds a key by binary search, which misses entries in a
+        # tree whose keys are out of order.  Such a tree breaks the spec,
+        # and keeping its stale entry beats removing no pages.
+        with contextlib.suppress(KeyError):
+            del tree[name]
 
 
 def _dests_name_tree(pdf: Pdf) -> NameTree | None:
@@ -408,18 +438,7 @@ def _prune_destinations(resolver: _Resolver) -> None:
     if name_tree is not None:
         # Collected first, since a tree cannot be changed while it is walked.
         stale_names = [name for name, dest in name_tree.items() if resolver.targets_removed(dest)]
-        if stale_names:
-            # The tree may be an indirect copy of a direct one, which has to
-            # take its place for the deletions to reach the file.  It is put
-            # back only when something is deleted, so a file with nothing to
-            # prune keeps the tree it had.
-            root.Names[Name.Dests] = name_tree.obj
-        for name in stale_names:
-            # NameTree finds a name by binary search, which misses entries in
-            # a tree whose names are out of order.  Such a tree breaks the
-            # spec, and keeping its stale entry beats removing no pages.
-            with contextlib.suppress(KeyError):
-                del name_tree[name]
+        _delete_from_tree(root.Names, Name.Dests, name_tree, stale_names)
 
     open_action = root.get(Name.OpenAction)
     if open_action is not None and resolver.targets_removed(open_action):
@@ -560,23 +579,13 @@ def _prune_struct_tree(resolver: _Resolver) -> None:
 
     stale_keys = _stale_parent_tree_keys(resolver)
     parent_tree = root.get(Name.ParentTree)
-    if isinstance(parent_tree, Dictionary) and stale_keys:
-        numbers = NumberTree(_tree_object(pdf, parent_tree))
-        root.ParentTree = numbers.obj
-        for number in stale_keys:
-            del numbers[number]
+    if isinstance(parent_tree, Dictionary):
+        _delete_from_tree(root, Name.ParentTree, NumberTree(_tree_object(pdf, parent_tree)), stale_keys)
 
     id_tree = root.get(Name.IDTree)
     if isinstance(id_tree, Dictionary) and dropped:
         ids = NameTree(_tree_object(pdf, id_tree))
-        stale_ids = [name for name, elem in ids.items() if elem.objgen in dropped]
-        if stale_ids:
-            root.IDTree = ids.obj
-        for name in stale_ids:
-            # As for /Dests: a tree out of order may hide a name from the
-            # binary search, and keeping its entry beats removing no pages.
-            with contextlib.suppress(KeyError):
-                del ids[name]
+        _delete_from_tree(root, Name.IDTree, ids, [name for name, elem in ids.items() if elem.objgen in dropped])
 
 
 def remove_pages(pdf: Pdf, pages: Pages) -> None:
