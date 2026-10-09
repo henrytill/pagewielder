@@ -91,7 +91,7 @@
         packages.default = pagewielder;
 
         # The package's check phase runs the tests.
-        checks.pagewielder = self.packages.${system}.pagewielder;
+        checks.pagewielder = pagewielder;
         # Runs the hooks over the whole repo. They are kept out of the package's check phase so that a new release of
         # one of the tools fails `nix flake check` rather than the build.
         checks.pre-commit = preCommit;
