@@ -214,6 +214,11 @@ def _destination_page(pdf: Pdf, dest: Object | int | None) -> Dictionary | None:
     times, so that forms like ``<< /S /GoTo /D (someName) >>`` -- an action
     whose destination is a name -- resolve as well as a bare name does.
 
+    Only a ``/GoTo`` action is followed, or a dictionary with no ``/S`` at
+    all, which is how ``/Dests`` and the name tree wrap a destination.  Other
+    kinds of action are not, since a ``/GoToR`` destination, say, names a page
+    in some other file.
+
     Args:
         pdf: The PDF file the destination belongs to.
         dest: A destination, an action containing one, or a reference to a
@@ -227,7 +232,8 @@ def _destination_page(pdf: Pdf, dest: Object | int | None) -> Dictionary | None:
         if isinstance(dest, (Name, String)):
             dest = _resolve_named_destination(pdf, dest)
         elif isinstance(dest, Dictionary):
-            dest = dest.get(Name.D)
+            kind = dest.get(Name.S)
+            dest = dest.get(Name.D) if kind is None or kind == Name.GoTo else None
         else:
             break
     if not isinstance(dest, Array) or len(dest) == 0:
@@ -240,9 +246,8 @@ def _destination_page(pdf: Pdf, dest: Object | int | None) -> Dictionary | None:
 def _goto_page(pdf: Pdf, dest: Object | int | None, action: Object | None) -> Dictionary | None:
     """Find the page object an outline item or link annotation points at.
 
-    Both carry their target the same way: a destination, or failing that a
-    ``/GoTo`` action.  Other kinds of action are not followed, since a
-    ``/GoToR`` destination, say, names a page in some other file.
+    Both carry their target the same way: a destination, or failing that an
+    action, which ``_destination_page()`` follows only if it is ``/GoTo``.
 
     Args:
         pdf: The PDF file the item belongs to.
@@ -252,9 +257,7 @@ def _goto_page(pdf: Pdf, dest: Object | int | None, action: Object | None) -> Di
     Returns:
         The page object the item targets, or None if it cannot be determined.
     """
-    if dest is None and isinstance(action, Dictionary) and action.get(Name.S) == Name.GoTo:
-        dest = action.get(Name.D)
-    return _destination_page(pdf, dest)
+    return _destination_page(pdf, action if dest is None else dest)
 
 
 def _prune_outline_items(pdf: Pdf, items: list[OutlineItem], removed: set[_ObjGen]) -> list[OutlineItem]:
