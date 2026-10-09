@@ -237,19 +237,23 @@ def _destination_page(pdf: Pdf, dest: Object | int | None) -> Dictionary | None:
     return page if isinstance(page, Dictionary) else None
 
 
-def _outline_item_page(pdf: Pdf, item: OutlineItem) -> Dictionary | None:
-    """Find the page object an outline item points at, if it can be determined.
+def _goto_page(pdf: Pdf, dest: Object | int | None, action: Object | None) -> Dictionary | None:
+    """Find the page object an outline item or link annotation points at.
+
+    Both carry their target the same way: a destination, or failing that a
+    ``/GoTo`` action.  Other kinds of action are not followed, since a
+    ``/GoToR`` destination, say, names a page in some other file.
 
     Args:
-        pdf: The PDF file the outline item belongs to.
-        item: An outline item.
+        pdf: The PDF file the item belongs to.
+        dest: The item's destination, if it has one.
+        action: The item's action, if it has one.
 
     Returns:
         The page object the item targets, or None if it cannot be determined.
     """
-    dest: Object | int | None = item.destination
-    if dest is None and isinstance(item.action, Dictionary) and item.action.get(Name.S) == Name.GoTo:
-        dest = item.action.get(Name.D)
+    if dest is None and isinstance(action, Dictionary) and action.get(Name.S) == Name.GoTo:
+        dest = action.get(Name.D)
     return _destination_page(pdf, dest)
 
 
@@ -267,12 +271,50 @@ def _prune_outline_items(pdf: Pdf, items: list[OutlineItem], removed: set[_ObjGe
     kept: list[OutlineItem] = []
     for item in items:
         item.children = _prune_outline_items(pdf, item.children, removed)
-        page = _outline_item_page(pdf, item)
+        page = _goto_page(pdf, item.destination, item.action)
         if page is not None and page.objgen in removed:
             kept.extend(item.children)
         else:
             kept.append(item)
     return kept
+
+
+def _prune_links(pdf: Pdf, removed: set[_ObjGen]) -> None:
+    """Delete link annotations on the remaining pages that point at removed pages.
+
+    Like a stale document-level destination, such a link leads nowhere and
+    keeps the page it names in the saved file.  The link is deleted outright
+    rather than stripped of its target, which would leave a clickable region
+    that does nothing.
+
+    Args:
+        pdf: The PDF file the pages belong to.
+        removed: Object identifiers of the removed page objects.
+    """
+
+    def is_stale_link(annot: Object) -> bool:
+        if not isinstance(annot, Dictionary) or annot.get(Name.Subtype) != Name.Link:
+            return False
+        page = _goto_page(pdf, annot.get(Name.Dest), annot.get(Name.A))
+        return page is not None and page.objgen in removed
+
+    # Pages may share one indirect /Annots array, whose entries must only be
+    # deleted once.
+    stale_links: list[tuple[Array, list[int]]] = []
+    seen_annots: set[_ObjGen] = set()
+    for page in pdf.pages:
+        annots = page.obj.get(Name.Annots)
+        if not isinstance(annots, Array) or (annots.is_indirect and annots.objgen in seen_annots):
+            continue
+        if annots.is_indirect:
+            seen_annots.add(annots.objgen)
+        stale = [index for index, annot in enumerate(annots.as_list()) if is_stale_link(annot)]
+        if stale:
+            stale_links.append((annots, stale))
+
+    for annots, stale in stale_links:
+        for index in reversed(stale):
+            del annots[index]
 
 
 def _prune_destinations(pdf: Pdf, removed: set[_ObjGen]) -> None:
@@ -283,9 +325,8 @@ def _prune_destinations(pdf: Pdf, removed: set[_ObjGen]) -> None:
     file is saved.
 
     Only ``/Root /Dests``, the ``/Root /Names /Dests`` name tree and
-    ``/Root /OpenAction`` are pruned.  Link annotations on the remaining pages
-    are a more common way to reference a page and are not touched, so a file
-    carrying those keeps both the dangling links and the pages they name.
+    ``/Root /OpenAction`` are pruned; ``_prune_links()`` sees to the links on
+    the remaining pages.
 
     Args:
         pdf: The PDF file the destinations belong to.
@@ -336,10 +377,10 @@ def remove_pages(pdf: Pdf, pages: Pages) -> None:
     the label it had, and the ranges are rebuilt against the new page
     indices.
 
-    Other structures that reference pages are left as they are, and a file
-    using them will not come out clean: link annotations on the remaining
-    pages can still name a removed page, which also keeps that page in the
-    saved file.
+    Link annotations on the remaining pages that point at a removed page are
+    deleted.  Other structures that reference pages, such as the structure
+    tree and article threads, are left as they are, and a file using them
+    keeps the pages they name in the saved file.
 
     Args:
         pdf: A PDF file.
@@ -356,6 +397,9 @@ def remove_pages(pdf: Pdf, pages: Pages) -> None:
         with pdf.open_outline() as outline:
             outline.root[:] = _prune_outline_items(pdf, outline.root, removed)
 
+    # Links go first: a link may reach its page through a named destination,
+    # which has to still be there to resolve it.
+    _prune_links(pdf, removed)
     _prune_destinations(pdf, removed)
 
     # A file with no labels to begin with, or labels we cannot read, is left

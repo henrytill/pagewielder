@@ -58,7 +58,7 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
   - `map_dimensions_to_pages()`: Groups page numbers by page dimensions, reading each page's
     size through `_get_dimensions()`, which measures the mediabox with pikepdf's `Rectangle`.
   - `remove_pages()`: Removes pages in place, keeping the rest of the document consistent (see below).
-  - Private helpers cover the bookkeeping: `_page_labels()` / `_set_page_labels()` for `/PageLabels`, with `_continues()` deciding where one range carries on into the next; `_prune_outline_items()` and `_outline_item_page()` for the outline; `_prune_destinations()`, `_destination_page()`, `_resolve_named_destination()` and `_dests_name_tree()` for destinations.
+  - Private helpers cover the bookkeeping: `_page_labels()` / `_set_page_labels()` for `/PageLabels`, with `_continues()` deciding where one range carries on into the next; `_prune_outline_items()` for the outline; `_prune_links()` for link annotations; `_goto_page()`, shared by the outline and links, then `_prune_destinations()`, `_destination_page()`, `_resolve_named_destination()` and `_dests_name_tree()` for destinations.
   - Uses pikepdf's `Page`, `Rectangle`, `NameTree`, `NumberTree` and outline APIs.
 
 - **pagewielder/cli.py**: Command-line interface.
@@ -78,9 +78,10 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
 
 - **Outline**: items pointing at a removed page are dropped and replaced by their children. Destinations are followed through named destinations (`/Root /Dests` and the `/Root /Names /Dests` name tree) and through `/GoTo` actions, in any order, bounded by `_MAX_DESTINATION_HOPS`.
 - **Destinations**: stale entries in `/Root /Dests`, the `/Root /Names /Dests` tree, and `/Root /OpenAction` are deleted, which also stops the removed page objects from being written back out.
+- **Links**: `/Link` annotations on the remaining pages whose `/Dest` or `/GoTo` action resolves to a removed page are deleted outright, not left as inert clickable regions. A shared `/Annots` array is pruned once. Links are pruned before destinations, since resolving one may need a named destination that is about to go.
 - **`/PageLabels`**: each surviving page keeps its label, and the ranges are rebuilt against the new indices, merging ranges that run on.
 
-Known limits, deliberate: link annotations on the remaining pages are not touched, so a file using them keeps dangling links and the pages they name. Malformed or unreadable `/PageLabels` are left alone rather than treated as an error.
+Known limits, deliberate: the structure tree (`/StructTreeRoot`) and article threads (`/Threads`) are not touched, so a file using them keeps the pages they name. Malformed or unreadable `/PageLabels` are left alone rather than treated as an error.
 
 ### Type Aliases
 ```python
@@ -114,9 +115,9 @@ The Nix build sets `PAGEWIELDER_GIT_REF` to the flake's revision, since the sand
 
 Tests use Python's unittest framework, discovered from `tests/`.
 
-- `tests/test_core.py`: `map_dimensions_to_pages` plus the bulk of the suite on `remove_pages` — outline pruning, named destinations, `/GoTo` actions, `/PageLabels` remapping, and the malformed-input cases.
+- `tests/test_core.py`: `map_dimensions_to_pages` plus the bulk of the suite on `remove_pages` — outline pruning, link annotations, named destinations, `/GoTo` actions, `/PageLabels` remapping, and the malformed-input cases.
 - `tests/test_cli.py`: `parse_page_range` and an end-to-end `excerpt` run.
-- `tests/helpers.py`: builders and readers shared by both — `make_pdf()`, `outline_titles()`, `set_page_labels()`, `page_label_ranges()`, and the `A4` / `PLATE` page sizes. Prefer extending these over hand-rolling PDF fixtures.
+- `tests/helpers.py`: builders and readers shared by both — `make_pdf()`, `outline_titles()`, `link()`, `set_annotations()`, `annotation_ids()`, `count_page_objects()`, `set_page_labels()`, `page_label_ranges()`, and the `A4` / `PLATE` page sizes. Prefer extending these over hand-rolling PDF fixtures.
 
 Run specific test:
 ```bash

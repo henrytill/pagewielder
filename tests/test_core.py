@@ -8,7 +8,18 @@ import pikepdf
 from pikepdf import Array, Dictionary, Name, NameTree, OutlineItem, String
 
 from pagewielder import core
-from tests.helpers import A4, PLATE, make_pdf, outline_titles, page_label_ranges, set_page_labels
+from tests.helpers import (
+    A4,
+    PLATE,
+    annotation_ids,
+    count_page_objects,
+    link,
+    make_pdf,
+    outline_titles,
+    page_label_ranges,
+    set_annotations,
+    set_page_labels,
+)
 
 
 class MapDimensionsToPagesTest(unittest.TestCase):
@@ -111,7 +122,7 @@ class RemovePagesTest(unittest.TestCase):
         buffer.seek(0)
         with pikepdf.open(buffer) as reloaded:
             # The removed page is gone from the file, not merely unlinked.
-            self.assertEqual(1, len([o for o in reloaded.objects if o.get(Name.Type) == Name.Page]))
+            self.assertEqual(1, count_page_objects(reloaded))
 
     def test_prunes_an_action_whose_destination_is_a_name(self) -> None:
         """A GoTo action naming a destination resolves through both hops."""
@@ -124,6 +135,60 @@ class RemovePagesTest(unittest.TestCase):
             core.remove_pages(pdf, {2})
 
             self.assertFalse(Name.OpenAction in pdf.Root)
+
+    def test_prunes_links_to_removed_pages(self) -> None:
+        """Links pointing at a removed page are deleted, and the page with them."""
+        buffer = io.BytesIO()
+        with make_pdf([A4, PLATE]) as pdf:
+            set_annotations(pdf, 0, [link(pdf, dest=Array([pdf.pages[1].obj, Name.Fit]))])
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([], annotation_ids(pdf, 0))
+            pdf.save(buffer)
+
+        buffer.seek(0)
+        with pikepdf.open(buffer) as reloaded:
+            self.assertEqual(1, count_page_objects(reloaded))
+
+    def test_prunes_links_using_goto_actions_and_named_destinations(self) -> None:
+        """A link whose GoTo action names a destination resolves through both hops."""
+        with make_pdf([A4, PLATE]) as pdf:
+            name_tree = NameTree.new(pdf)
+            name_tree["plate"] = Array([pdf.pages[1].obj, Name.Fit])
+            pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=name_tree.obj))
+            set_annotations(pdf, 0, [link(pdf, action=Dictionary(S=Name.GoTo, D=String("plate")))])
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([], annotation_ids(pdf, 0))
+
+    def test_keeps_other_annotations(self) -> None:
+        """Links to remaining pages, other actions and other annotations survive."""
+        with make_pdf([A4, A4, PLATE]) as pdf:
+            kept = [
+                link(pdf, dest=Array([pdf.pages[1].obj, Name.Fit])),
+                link(pdf, action=Dictionary(S=Name.URI, URI=String("https://example.com"))),
+                link(pdf, action=Dictionary(S=Name.GoToR, F=String("other.pdf"), D=Array([1, Name.Fit]))),
+                pdf.make_indirect(Dictionary(Type=Name.Annot, Subtype=Name.Text, Rect=Array([0, 0, 10, 10]))),
+            ]
+            set_annotations(pdf, 0, [*kept, link(pdf, dest=Array([pdf.pages[2].obj, Name.Fit]))])
+
+            core.remove_pages(pdf, {3})
+
+            self.assertEqual([annot.objgen for annot in kept], annotation_ids(pdf, 0))
+
+    def test_prunes_links_in_a_shared_annotations_array(self) -> None:
+        """An /Annots array shared between remaining pages is pruned once, correctly."""
+        with make_pdf([A4, A4, PLATE]) as pdf:
+            kept = link(pdf, dest=Array([pdf.pages[0].obj, Name.Fit]))
+            set_annotations(pdf, 0, [kept, link(pdf, dest=Array([pdf.pages[2].obj, Name.Fit]))])
+            pdf.pages[1].Annots = pdf.pages[0].Annots
+
+            core.remove_pages(pdf, {3})
+
+            self.assertEqual([kept.objgen], annotation_ids(pdf, 0))
+            self.assertEqual([kept.objgen], annotation_ids(pdf, 1))
 
     def test_tolerates_a_direct_destination_name_tree(self) -> None:
         """A name tree whose root is a direct object is left alone, not fatal."""
