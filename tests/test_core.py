@@ -207,6 +207,25 @@ class RemovePagesTest(unittest.TestCase):
             self.assertFalse(pdf.Root.Names.Dests.is_indirect)
             self.assertEqual(1, len(annotation_ids(pdf, 0)))
 
+    def test_tolerates_an_unsorted_destination_name_tree(self) -> None:
+        """A name tree with its names out of order does not stop the removal."""
+        with make_pdf([A4, PLATE]) as pdf:
+            dests = Dictionary(
+                Names=Array(
+                    [
+                        String("plate"),
+                        Array([pdf.pages[1].obj, Name.Fit]),
+                        String("first"),
+                        Array([pdf.pages[0].obj, Name.Fit]),
+                    ]
+                )
+            )
+            pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=pdf.make_indirect(dests)))
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual(1, len(pdf.pages))
+
     def test_remaps_page_labels(self) -> None:
         """Labels follow the pages they describe."""
         with make_pdf([A4, A4, A4, A4]) as pdf:
