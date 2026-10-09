@@ -30,6 +30,7 @@ line-length = 120
 
 [tool.mypy]
 strict = true
+files = ["pagewielder", "tests", "version.py"]
 check_untyped_defs = true
 warn_redundant_casts = false
 
@@ -46,4 +47,6 @@ disable = [
 ]
 
 [tool.pyright]
+# Without it pyright walks the whole tree, including the installed copy under a ./result symlink.
+include = ["pagewielder", "tests", "version.py"]
 strict = ["pagewielder", "tests", "version.py"]
