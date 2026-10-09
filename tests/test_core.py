@@ -12,12 +12,12 @@ from tests.helpers import (
     A4,
     PLATE,
     annotation_ids,
-    count_page_objects,
     link,
     make_pdf,
     named_destinations,
     outline_titles,
     page_label_ranges,
+    saved_page_objects,
     set_annotations,
     set_named_destinations,
     set_page_labels,
@@ -106,7 +106,6 @@ class RemovePagesTest(unittest.TestCase):
 
     def test_prunes_named_destinations_for_removed_pages(self) -> None:
         """Named destinations pointing at removed pages are dropped."""
-        buffer = io.BytesIO()
         with make_pdf([A4, PLATE]) as pdf:
             set_named_destinations(pdf, {"plate": Array([pdf.pages[1].obj, Name.Fit])})
             pdf.Root.OpenAction = Array([pdf.pages[1].obj, Name.Fit])
@@ -115,12 +114,8 @@ class RemovePagesTest(unittest.TestCase):
 
             self.assertEqual([], named_destinations(pdf))
             self.assertFalse(Name.OpenAction in pdf.Root)
-            pdf.save(buffer)
-
-        buffer.seek(0)
-        with pikepdf.open(buffer) as reloaded:
             # The removed page is gone from the file, not merely unlinked.
-            self.assertEqual(1, count_page_objects(reloaded))
+            self.assertEqual(1, saved_page_objects(pdf))
 
     def test_prunes_an_action_whose_destination_is_a_name(self) -> None:
         """A GoTo action naming a destination resolves through both hops."""
@@ -144,18 +139,13 @@ class RemovePagesTest(unittest.TestCase):
 
     def test_prunes_links_to_removed_pages(self) -> None:
         """Links pointing at a removed page are deleted, and the page with them."""
-        buffer = io.BytesIO()
         with make_pdf([A4, PLATE]) as pdf:
             set_annotations(pdf, 0, [link(pdf, dest=Array([pdf.pages[1].obj, Name.Fit]))])
 
             core.remove_pages(pdf, {2})
 
             self.assertEqual([], annotation_ids(pdf, 0))
-            pdf.save(buffer)
-
-        buffer.seek(0)
-        with pikepdf.open(buffer) as reloaded:
-            self.assertEqual(1, count_page_objects(reloaded))
+            self.assertEqual(1, saved_page_objects(pdf))
 
     def test_prunes_links_using_goto_actions_and_named_destinations(self) -> None:
         """A link whose GoTo action names a destination resolves through both hops."""
@@ -196,7 +186,6 @@ class RemovePagesTest(unittest.TestCase):
 
     def test_prunes_a_direct_destination_name_tree(self) -> None:
         """A name tree whose root is a direct object is pruned like any other."""
-        buffer = io.BytesIO()
         with make_pdf([A4, PLATE]) as pdf:
             dests = Dictionary(Names=Array([String("plate"), Array([pdf.pages[1].obj, Name.Fit])]))
             pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=dests))
@@ -204,11 +193,7 @@ class RemovePagesTest(unittest.TestCase):
             core.remove_pages(pdf, {2})
 
             self.assertEqual([], named_destinations(pdf))
-            pdf.save(buffer)
-
-        buffer.seek(0)
-        with pikepdf.open(buffer) as reloaded:
-            self.assertEqual(1, count_page_objects(reloaded))
+            self.assertEqual(1, saved_page_objects(pdf))
 
     def test_remaps_page_labels(self) -> None:
         """Labels follow the pages they describe."""
