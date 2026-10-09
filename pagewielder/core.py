@@ -716,7 +716,7 @@ def _prune_struct_tree(resolver: _Resolver) -> None:
     id_tree = root.get(Name.IDTree)
     if isinstance(id_tree, Dictionary) and dropped:
         ids = NameTree(_tree_object(pdf, id_tree))
-        _delete_from_tree(root, Name.IDTree, ids, [name for name, elem in ids.items() if elem.objgen in dropped])
+        _delete_from_tree(root, Name.IDTree, ids, [name for name, elem in ids.items() if _indirect_id(elem) in dropped])
 
 
 def remove_pages(pdf: Pdf, pages: Pages) -> None:

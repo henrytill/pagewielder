@@ -488,6 +488,19 @@ class StructTreeTest(unittest.TestCase):
             self.assertEqual(["first"], list(NameTree(root.IDTree).keys()))
             self.assertEqual(1, saved_page_objects(pdf))
 
+    def test_tolerates_a_null_in_the_id_tree(self) -> None:
+        """A null /IDTree value does not stop the removal."""
+        with make_pdf([A4, A4]) as pdf:
+            first = struct_elem(pdf, 0, page=pdf.pages[0].obj)
+            second = struct_elem(pdf, 0, page=pdf.pages[1].obj)
+            root = set_struct_tree(pdf, [first, second], {}, ids={"second": second})
+            root.IDTree.Names.append(String("zzz"))
+            root.IDTree.Names.append(None)
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual(["zzz"], list(NameTree(root.IDTree).keys()))
+
     def test_prunes_a_direct_parent_tree(self) -> None:
         """A /ParentTree written as a direct dictionary is pruned too."""
         with make_pdf([A4, A4]) as pdf:
