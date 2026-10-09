@@ -99,16 +99,18 @@ class ParsePageRangeTest(unittest.TestCase):
             "5:1": cli.MSG_START_AFTER_END.format(start=5, end=1),
         }
         for page_range, message in cases.items():
-            with self.subTest(page_range=page_range), self.assertRaises(ValueError) as caught:
-                cli.parse_page_range(page_range, 10)
-            self.assertEqual(message, str(caught.exception))
+            with self.subTest(page_range=page_range):
+                with self.assertRaises(ValueError) as caught:
+                    cli.parse_page_range(page_range, 10)
+                self.assertEqual(message, str(caught.exception))
 
     def test_reports_malformed_page_numbers_alike(self) -> None:
         """A malformed page number gets the same message wherever it appears."""
         for page_range in ("x", "x:5", "1:x"):
-            with self.subTest(page_range=page_range), self.assertRaises(ValueError) as caught:
-                cli.parse_page_range(page_range, 10)
-            self.assertEqual(cli.MSG_INVALID_PAGE.format(text="x"), str(caught.exception))
+            with self.subTest(page_range=page_range):
+                with self.assertRaises(ValueError) as caught:
+                    cli.parse_page_range(page_range, 10)
+                self.assertEqual(cli.MSG_INVALID_PAGE.format(text="x"), str(caught.exception))
 
 
 if __name__ == "__main__":
