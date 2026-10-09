@@ -1,15 +1,19 @@
 """Tests for pagewielder.cli."""
 
+import contextlib
+import io
 import tempfile
 import unittest
 from argparse import Namespace
 from pathlib import Path
+from unittest import mock
 
 import pikepdf
 from pikepdf import OutlineItem
 
 from pagewielder import cli
-from tests.helpers import A4, make_pdf, outline_titles
+from pagewielder.core import Dimensions
+from tests.helpers import A4, PLATE, make_pdf, outline_titles
 
 
 def _make_input_pdf(path: Path) -> None:
@@ -19,6 +23,42 @@ def _make_input_pdf(path: Path) -> None:
             outline.root.append(OutlineItem("Chapter 2", 1))
             outline.root.append(OutlineItem("Chapter 3", 3))
         pdf.save(path)
+
+
+class SelectDimensionsTest(unittest.TestCase):
+    """Tests for select_dimensions."""
+
+    DIMENSIONS_TO_PAGES = {A4: {1, 2}, PLATE: {3}}
+
+    def _select(self, *answers: str) -> tuple[set[Dimensions] | None, str]:
+        """Run select_dimensions with the given answers, returning its result and output."""
+        output = io.StringIO()
+        with mock.patch("builtins.input", side_effect=answers), contextlib.redirect_stdout(output):
+            selected = cli.select_dimensions(self.DIMENSIONS_TO_PAGES)
+        return selected, output.getvalue()
+
+    def test_selects_by_index(self) -> None:
+        """Comma-separated indices select the matching dimensions."""
+        selected, output = self._select("0, 1")
+        self.assertEqual({A4, PLATE}, selected)
+        self.assertNotIn(cli.PROMPT_INVALID_INPUT, output)
+
+    def test_empty_input_cancels(self) -> None:
+        """An empty answer cancels the selection."""
+        selected, _ = self._select("")
+        self.assertIsNone(selected)
+
+    def test_rejects_negative_indices(self) -> None:
+        """A negative index is rejected rather than counting from the end."""
+        selected, output = self._select("-1", "0")
+        self.assertEqual({A4}, selected)
+        self.assertEqual(1, output.count(cli.PROMPT_INVALID_INPUT))
+
+    def test_rejects_out_of_range_and_malformed_indices(self) -> None:
+        """Indices past the end, and input that is not a number, are rejected."""
+        selected, output = self._select("2", "0,x", "1")
+        self.assertEqual({PLATE}, selected)
+        self.assertEqual(2, output.count(cli.PROMPT_INVALID_INPUT))
 
 
 class ExcerptCommandTest(unittest.TestCase):

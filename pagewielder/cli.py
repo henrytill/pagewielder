@@ -84,11 +84,16 @@ def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> set[Dimen
         user_input = input(PROMPT_SELECT_DIMENSIONS)
         if not user_input:
             return None
-        selected_dimensions = user_input.split(",")
         try:
-            return {dimensions_list[int(index)] for index in selected_dimensions}
-        except (ValueError, IndexError):
+            indices = {int(index) for index in user_input.split(",")}
+        except ValueError:
             print(PROMPT_INVALID_INPUT)
+            continue
+        # Checked by hand rather than left to IndexError, since a negative
+        # index would quietly select from the end of the list.
+        if all(0 <= index < len(dimensions_list) for index in indices):
+            return {dimensions_list[index] for index in indices}
+        print(PROMPT_INVALID_INPUT)
 
 
 def _resolve_output_path(input_path: Path, output: Path | None) -> Path | None:
