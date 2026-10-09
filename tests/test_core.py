@@ -341,6 +341,20 @@ class StructTreeTest(unittest.TestCase):
             self.assertEqual([], parent_tree_keys(pdf))
             self.assertEqual(1, saved_page_objects(pdf))
 
+    def test_drops_the_parent_tree_entry_of_a_pruned_link_with_no_reference(self) -> None:
+        """A pruned link's /ParentTree entry goes even when no object reference names the link."""
+        with make_pdf([A4, A4]) as pdf:
+            annot = link(pdf, dest=Array([pdf.pages[1].obj, Name.Fit]))
+            annot.StructParent = 0
+            set_annotations(pdf, 0, [annot])
+            elem = struct_elem(pdf, 0, page=pdf.pages[0].obj)
+            set_struct_tree(pdf, [elem], {0: elem})
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([], parent_tree_keys(pdf))
+            self.assertEqual([elem.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
+
     def test_drops_elements_on_removed_pages(self) -> None:
         """Elements whose content was all on removed pages go, with their /ParentTree entries."""
         with make_pdf([A4, A4]) as pdf:

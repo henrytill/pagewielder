@@ -218,6 +218,10 @@ class _Resolver:
 
     Attributes:
         removed: Object identifiers of the removed page objects.
+        stale_links: The link annotations on the remaining pages that point
+            at removed pages, found up front for the same reason: the
+            structure tree has to know which links ``_prune_links()``
+            deletes, whether it is pruned before or after them.
         name_tree: The ``/Names /Dests`` name tree, or None if the file has
             none.  It is built once, since over a direct tree that means
             copying the tree.
@@ -239,6 +243,11 @@ class _Resolver:
             {key: dests[key] for key in dests.keys()} if isinstance(dests, Dictionary) else {}
         )
         self._names: dict[str | bytes, Object] = dict(self.name_tree.items()) if self.name_tree is not None else {}
+        self.stale_links: list[Object] = []
+        for page in pdf.pages:
+            annots = page.obj.get(Name.Annots)
+            if isinstance(annots, Array):
+                self.stale_links += [annot for annot in annots.as_list() if self.is_stale_link(annot)]
 
     def _resolve_named_destination(self, name: Name | String) -> Object | None:
         """Resolve a named destination to the destination it refers to.
@@ -305,6 +314,19 @@ class _Resolver:
         """
         return self.is_removed(self._destination_page(action if dest is None else dest))
 
+    def is_stale_link(self, annot: Object) -> bool:
+        """Say whether an annotation is a link pointing at a removed page.
+
+        Args:
+            annot: An annotation.
+
+        Returns:
+            True if annot is a link whose target is a removed page.
+        """
+        if not isinstance(annot, Dictionary) or annot.get(Name.Subtype) != Name.Link:
+            return False
+        return self.targets_removed(annot.get(Name.Dest), annot.get(Name.A))
+
     def is_removed(self, page: Object | None) -> bool:
         """Say whether page is a removed page.
 
@@ -337,21 +359,6 @@ def _prune_outline_items(resolver: _Resolver, items: list[OutlineItem]) -> list[
     return kept
 
 
-def _is_stale_link(resolver: _Resolver, annot: Object) -> bool:
-    """Say whether an annotation is a link pointing at a removed page.
-
-    Args:
-        resolver: The resolver for this remove_pages() call.
-        annot: An annotation.
-
-    Returns:
-        True if annot is a link whose target is a removed page.
-    """
-    if not isinstance(annot, Dictionary) or annot.get(Name.Subtype) != Name.Link:
-        return False
-    return resolver.targets_removed(annot.get(Name.Dest), annot.get(Name.A))
-
-
 def _prune_links(resolver: _Resolver) -> None:
     """Delete link annotations on the remaining pages that point at removed pages.
 
@@ -369,7 +376,7 @@ def _prune_links(resolver: _Resolver) -> None:
         annots = page.obj.get(Name.Annots)
         if not isinstance(annots, Array):
             continue
-        stale = [index for index, annot in enumerate(annots.as_list()) if _is_stale_link(resolver, annot)]
+        stale = [index for index, annot in enumerate(annots.as_list()) if resolver.is_stale_link(annot)]
         for index in reversed(stale):
             del annots[index]
 
@@ -423,8 +430,7 @@ class _StructTreePruner:
     """Walks a structure tree, dropping what belongs to removed pages or pruned links.
 
     Attributes:
-        stale_keys: The ``/ParentTree`` keys of the annotations whose object
-            references were dropped.
+        stale_keys: The ``/ParentTree`` keys of what was removed.
         dropped: Object identifiers of the elements dropped.
     """
 
@@ -479,15 +485,16 @@ class _StructTreePruner:
         if kind == Name.MCR:
             return not self.resolver.is_removed(kid.get(Name.Pg, page))
         if kind == Name.OBJR:
-            annot = kid.get(Name.Obj)
-            stale = self.resolver.is_removed(kid.get(Name.Pg, page)) or (
-                isinstance(annot, Dictionary)
-                and (self.resolver.is_removed(annot.get(Name.P)) or _is_stale_link(self.resolver, annot))
-            )
-            if stale:
-                self.add_stale_key(annot, Name.StructParent)
-            return not stale
+            return self._keep_object_reference(kid, page)
         return self._keep_element(kid)
+
+    def _keep_object_reference(self, objr: Dictionary, page: Object | None) -> bool:
+        if self.resolver.is_removed(objr.get(Name.Pg, page)):
+            return False
+        annot = objr.get(Name.Obj)
+        if not isinstance(annot, Dictionary):
+            return True
+        return not (self.resolver.is_removed(annot.get(Name.P)) or self.resolver.is_stale_link(annot))
 
     def _keep_element(self, elem: Dictionary) -> bool:
         # An element reached twice, by a malformed tree sharing or looping
@@ -533,12 +540,16 @@ def _prune_struct_tree(resolver: _Resolver) -> None:
     pruner = _StructTreePruner(resolver)
     pruner.prune_kids(root, None)
 
+    # The entries to drop are keyed by what goes: the removed pages, their
+    # annotations, and the links pruned from the remaining pages.
     for page in resolver.removed_pages:
         pruner.add_stale_key(page, Name.StructParents)
         annots = page.get(Name.Annots)
         if isinstance(annots, Array):
             for annot in annots.as_list():
                 pruner.add_stale_key(annot, Name.StructParent)
+    for annot in resolver.stale_links:
+        pruner.add_stale_key(annot, Name.StructParent)
 
     parent_tree = root.get(Name.ParentTree)
     if isinstance(parent_tree, Dictionary) and pruner.stale_keys:
