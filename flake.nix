@@ -64,9 +64,8 @@
           src = ./.;
           hooks = {
             nixfmt.enable = true;
-            black.enable = true;
-            isort.enable = true;
-            flake8.enable = true;
+            ruff.enable = true;
+            ruff-format.enable = true;
             pylint = {
               enable = true;
               package = lintEnv;
