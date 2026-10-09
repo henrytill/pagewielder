@@ -652,6 +652,23 @@ def _stale_parent_tree_keys(resolver: _Resolver) -> set[int]:
     return keys
 
 
+def _names_only_dropped(value: Object, dropped: set[_ObjGen]) -> bool:
+    """Say whether a ``/ParentTree`` value names dropped elements and nothing else.
+
+    Args:
+        value: An element, or an array of elements with nulls where marked
+            content has no parent.
+        dropped: Object identifiers of the elements dropped.
+
+    Returns:
+        True if value names at least one dropped element and no other.
+    """
+    elems = value.as_list() if isinstance(value, Array) else [value]
+    # Elements are indirect; a null, or anything else, names none.
+    named = [objgen for objgen in map(_indirect_id, elems) if objgen is not None]
+    return bool(named) and all(objgen in dropped for objgen in named)
+
+
 def _prune_struct_tree(resolver: _Resolver) -> None:
     """Drop the parts of the structure tree that belong to removed pages or pruned links.
 
@@ -681,7 +698,11 @@ def _prune_struct_tree(resolver: _Resolver) -> None:
     stale_keys = _stale_parent_tree_keys(resolver)
     parent_tree = root.get(Name.ParentTree)
     if isinstance(parent_tree, Dictionary):
-        _delete_from_tree(root, Name.ParentTree, NumberTree(_tree_object(pdf, parent_tree)), stale_keys)
+        numbers = NumberTree(_tree_object(pdf, parent_tree))
+        # An entry naming only dropped elements goes too, whatever its key
+        # belongs to: a form XObject drawn on a removed page, say.
+        stale_keys |= {number for number, value in numbers.items() if _names_only_dropped(value, dropped)}
+        _delete_from_tree(root, Name.ParentTree, numbers, stale_keys)
 
     id_tree = root.get(Name.IDTree)
     if isinstance(id_tree, Dictionary) and dropped:
