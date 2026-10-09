@@ -64,9 +64,10 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
 - **pagewielder/cli.py**: Command-line interface.
   - Two commands: `filter` (interactive dimension selection) and `excerpt` (page range extraction).
   - `parse_page_range()`: Handles the page range syntax above.
-  - `select_dimensions()`: Interactive prompt for dimension-based filtering.  Its prompt strings are
-    module constants (`PROMPT_*`); a test that drives this path should match on those rather than on
-    literal text.  Nothing tests it today.
+  - `select_dimensions()`: Interactive prompt for dimension-based filtering.  Indices are
+    range-checked by hand, so a negative one is rejected rather than counting from the end.  Its
+    prompt strings are module constants (`PROMPT_*`); the tests drive it by patching `input` and
+    match on those constants rather than on literal text.
   - `_resolve_output_path()`: Shared by both commands; allocates the temporary file and rejects an output equal to the input.
   - `main()` takes an optional argument sequence and returns an exit code, so it can be driven
     directly.  The current tests call the `*_command` functions with a hand-built `Namespace`
@@ -116,7 +117,7 @@ The Nix build sets `PAGEWIELDER_GIT_REF` to the flake's revision, since the sand
 Tests use Python's unittest framework, discovered from `tests/`.
 
 - `tests/test_core.py`: `map_dimensions_to_pages` plus the bulk of the suite on `remove_pages` — outline pruning, link annotations, named destinations, `/GoTo` actions, `/PageLabels` remapping, and the malformed-input cases.
-- `tests/test_cli.py`: `parse_page_range` and an end-to-end `excerpt` run.
+- `tests/test_cli.py`: `select_dimensions`, `parse_page_range` and an end-to-end `excerpt` run.
 - `tests/helpers.py`: builders and readers shared by both — `make_pdf()`, `outline_titles()`, `link()`, `set_annotations()`, `annotation_ids()`, `count_page_objects()`, `set_page_labels()`, `page_label_ranges()`, and the `A4` / `PLATE` page sizes. Prefer extending these over hand-rolling PDF fixtures.
 
 Run specific test:
