@@ -29,6 +29,23 @@ the `.flake8` excludes -- `run.py` included.
 
 Add `-e` or `--venv` flag to use the virtual environment (e.g., `./run.py -e check`).
 
+### Pre-commit Hooks
+
+The same tools also run as [pre-commit](https://pre-commit.com) hooks, declared in `flake.nix` with
+[git-hooks.nix](https://github.com/cachix/git-hooks.nix).  Entering the dev shell generates `.pre-commit-config.yaml`
+(a gitignored symlink into the Nix store; don't edit or commit it) and installs the git hook.
+
+```bash
+nix develop                  # Shell with the tools; installs the hook
+pre-commit run --all-files   # Run the hooks over the whole repo by hand
+nix flake check              # Run them in the sandbox, as checks.pre-commit
+```
+
+The hooks are nixfmt, black, isort, flake8 and pylint on the changed files, and mypy and pyright on the whole project,
+which both take what to check from `pyproject.toml`.  pylint, mypy and pyright run against `lintEnv`, a Python with
+pikepdf, since the hooks' own tools see no third-party packages otherwise.  pylint skips `run.py`, which `lint` never
+covered either.
+
 ### Version Generation
 
 The version is computed at build time.  Hatchling runs `version.py` as its version source, which reads the base
