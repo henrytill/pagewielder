@@ -27,12 +27,13 @@
           pname = "pagewielder";
           inherit version;
           pyproject = true;
-          build-system = with pkgs.python3Packages; [ flit-core ];
+          build-system = with pkgs.python3Packages; [ hatchling ];
           dependencies = with pkgs.python3Packages; [ pikepdf ];
           nativeCheckInputs = with pkgs.python3Packages; [ mypy ];
           src = self;
           patchPhase = "patchShebangs run.py";
-          preConfigure = "./run.py generate -g ${gitRef}";
+          # version.py asks git for the reference, and the sandbox has no .git.
+          env.PAGEWIELDER_GIT_REF = gitRef;
           checkPhase = "./run.py check";
         };
     in

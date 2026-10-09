@@ -23,21 +23,22 @@ All development tasks are managed through `run.py`, which supports both system P
 ./run.py test                # Run unittest tests
 ```
 
-`check` and `fmt` cover both `pagewielder/` and `tests/`.  `test` discovers from `tests/` alone.
-`lint` runs pylint over both, but invokes flake8 with no path, so flake8 walks the repo root minus
+`check` and `fmt` cover `pagewielder/`, `tests/` and `version.py`.  `test` discovers from `tests/` alone.
+`lint` runs pylint over the same three, but invokes flake8 with no path, so flake8 walks the repo root minus
 the `.flake8` excludes -- `run.py` included.
 
 Add `-e` or `--venv` flag to use the virtual environment (e.g., `./run.py -e check`).
 
 ### Version Generation
-```bash
-./run.py generate            # Auto-generate pagewielder/__init__.py with version
-./run.py generate -g <ref>   # Generate with specific git reference
-```
 
-The version file (`pagewielder/__init__.py`) is auto-generated and should not be edited manually. It's generated before builds and includes git commit info.
+The version is computed at build time.  Hatchling runs `version.py` as its version source, which reads the base
+version from the `VERSION` file and appends the git reference: `PAGEWIELDER_GIT_REF` if set, otherwise
+`git rev-parse --short HEAD`, otherwise nothing.  The result looks like `0.1.0+ac0c2e6`.  `flake.nix` reads
+`VERSION` too.
 
-**Version source**: The base version is stored in the `VERSION` file at the repository root. Both `run.py` and `flake.nix` read from this file to ensure consistency. The final version format is `<base_version>+<git-ref>` (e.g., `0.1.0+ac0c2e6`).
+Hatchling's version build hook writes the result to `pagewielder/_version.py`, which is gitignored and re-exported by
+`pagewielder/__init__.py`.  Any build writes it, including the editable install `create-env` does, so in a checkout
+it holds the hash from the last install rather than the current HEAD.
 
 ### Running the Application
 ```bash
@@ -90,10 +91,11 @@ Pages = set[int]                  # 1-based page numbers
 
 ## Build System
 
-Uses flit-core for building. The package can also be built with Nix (see `flake.nix`).
+Uses hatchling for building. The package can also be built with Nix (see `flake.nix`).
 
 ### pyproject.toml Configuration
 - Python >=3.11 required
+- Version from `version.py` (see Version Generation); description is static
 - Single runtime dependency: pikepdf >=7.1.2
 - Dev dependencies (`.[dev]`): black, flake8, isort, mypy, pylint; the `test` and `types` extras exist but are empty
 - Console script: `pagewielder = "pagewielder.__main__:main"`
@@ -106,7 +108,7 @@ Tool settings live in `pyproject.toml` and `.flake8`; see Code Style below for w
 nix build                    # Build with Nix flakes
 ```
 
-The Nix build runs `./run.py generate -g <rev>` in `preConfigure` and `./run.py check` as its check phase.
+The Nix build sets `PAGEWIELDER_GIT_REF` to the flake's revision, since the sandbox has no `.git`, and runs `./run.py check` as its check phase.
 
 ## Testing
 
@@ -124,10 +126,9 @@ python -m unittest tests.test_core.RemovePagesTest.test_removes_pages
 ## CI/CD
 
 GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push/PR to master (and `workflow_dispatch`), on Python 3.11:
-1. `./run.py generate`
-2. `./run.py -e create-env`
-3. `./run.py -e check`
-4. `./run.py -e lint`
+1. `./run.py -e create-env`
+2. `./run.py -e check`
+3. `./run.py -e lint`
 
 There is no test step in CI; run `./run.py test` locally.
 
@@ -135,7 +136,7 @@ There is no test step in CI; run `./run.py test` locally.
 
 - Max line length: 120 characters, set for black, isort, pylint and flake8 alike
 - Black formatting with isort for imports
-- Type hints required: mypy strict over `pagewielder` and `tests`, pyright strict over the same
+- Type hints required: mypy strict over `pagewielder`, `tests` and `version.py`, pyright strict over the same
 - flake8 ignores E203 (whitespace before ':') and F401 in `__init__.py`; pylint disables C0301 (line-too-long, black's job) and C0414 (useless-import-alias)
 - Google-style docstrings with Args/Returns/Raises on public and private functions alike
 - Comments explain why a case is handled, not what the line does; the existing code is the reference for tone
