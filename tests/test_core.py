@@ -195,6 +195,18 @@ class RemovePagesTest(unittest.TestCase):
             self.assertEqual([], named_destinations(pdf))
             self.assertEqual(1, saved_page_objects(pdf))
 
+    def test_leaves_a_direct_destination_name_tree_with_nothing_to_prune(self) -> None:
+        """A direct name tree naming only remaining pages is not made indirect."""
+        with make_pdf([A4, PLATE]) as pdf:
+            dests = Dictionary(Names=Array([String("first"), Array([pdf.pages[0].obj, Name.Fit])]))
+            pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=dests))
+            set_annotations(pdf, 0, [link(pdf, dest=String("first"))])
+
+            core.remove_pages(pdf, {2})
+
+            self.assertFalse(pdf.Root.Names.Dests.is_indirect)
+            self.assertEqual(1, len(annotation_ids(pdf, 0)))
+
     def test_remaps_page_labels(self) -> None:
         """Labels follow the pages they describe."""
         with make_pdf([A4, A4, A4, A4]) as pdf:
