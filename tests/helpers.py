@@ -1,7 +1,9 @@
 """Shared helpers for the pagewielder tests."""
 
+import io
 from collections.abc import Mapping, Sequence
 
+import pikepdf
 from pikepdf import Array, Dictionary, Name, NameTree, NumberTree, Object, Pdf
 
 A4 = (595.0, 842.0)
@@ -40,6 +42,15 @@ def set_annotations(pdf: Pdf, index: int, annots: Sequence[Object]) -> None:
 def count_page_objects(pdf: Pdf) -> int:
     """Count the /Page objects in a PDF, whether or not the page tree holds them."""
     return len([o for o in pdf.objects if isinstance(o, Dictionary) and o.get(Name.Type) == Name.Page])
+
+
+def saved_page_objects(pdf: Pdf) -> int:
+    """Save a PDF, reopen it, and count the /Page objects the saved file holds."""
+    buffer = io.BytesIO()
+    pdf.save(buffer)
+    buffer.seek(0)
+    with pikepdf.open(buffer) as reloaded:
+        return count_page_objects(reloaded)
 
 
 def annotation_ids(pdf: Pdf, index: int) -> list[tuple[int, int]]:
