@@ -90,7 +90,7 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
 - **Structure tree**: in a tagged PDF, marked content on removed pages and object references to annotations that went with the removed pages (judged by which pages' `/Annots` hold them) or to pruned links are dropped, then elements left empty, recursively, without promoting their children. A surviving element loses a `/Pg` naming a removed page, `/ParentTree` loses the entries keyed by the removed pages, their annotations and the pruned links, and any entry naming only dropped elements, and `/IDTree` loses the dropped elements. A dropped element also loses its `/K` and `/Pg`, since a `/ParentTree` entry for a form XObject, say, can still reach it. A root left empty stays, as does `/MarkInfo`.
 - **`/PageLabels`**: each surviving page keeps its label, and the ranges are rebuilt against the new indices, merging ranges that run on.
 
-Known limits, deliberate: article threads (`/Threads`) are not touched, so a file using them keeps the pages they name. Malformed or unreadable `/PageLabels`, `/Names /Dests`, `/ParentTree` and `/IDTree` trees are left alone rather than treated as an error.
+Known limits, deliberate: article threads (`/Threads`) and the interactive form (`/AcroForm`) are not touched, so a file using them keeps the pages they name: a form field whose widget was on a removed page stays in `/AcroForm /Fields`, and the widget's `/P` keeps that page in the saved file. Likewise an annotation that was only on a removed page stays reachable through the `/Popup` or `/IRT` of one that remains. Malformed or unreadable `/PageLabels`, `/Names /Dests`, `/ParentTree` and `/IDTree` trees are left alone rather than treated as an error.
 
 ### Type Aliases
 ```python
