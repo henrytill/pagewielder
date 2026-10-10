@@ -664,6 +664,29 @@ class FormTest(unittest.TestCase):
             self.assertEqual({"/1", "/Off"}, set(widgets[2].AP.N.keys()))
             self.assertEqual(Name("/1"), radio.V)
 
+    def test_renames_a_shared_appearance_dictionary_once(self) -> None:
+        """Widgets sharing one /AP have it renamed once, so it stays in step with their /AS."""
+        with make_pdf([A4, A4, A4, A4]) as pdf:
+            widgets = [widget(pdf, page) for page in range(4)]
+            on = Stream(pdf, b"")
+            for button, state in zip(widgets[:2], ["/0", "/1"]):
+                button.AP = Dictionary(N=Dictionary({state: on, "/Off": on}))
+            shared = pdf.make_indirect(Dictionary(N=Dictionary({"/2": on, "/Off": on})))
+            for button in widgets[2:]:
+                button.AP = shared
+                button.AS = Name("/2")
+            radio = field(pdf, "radio", widgets)
+            radio.FT = Name.Btn
+            radio.Opt = Array([String("a"), String("b"), String("c"), String("c")])
+            radio.V = Name("/2")
+            set_form(pdf, [radio])
+
+            core.remove_pages(pdf, {1})
+
+            self.assertEqual({"/1", "/Off"}, set(shared.N.keys()))
+            self.assertEqual([Name("/1"), Name("/1")], [button.AS for button in widgets[2:]])
+            self.assertEqual(Name("/1"), radio.V)
+
     def test_trims_button_options_for_direct_widgets(self) -> None:
         """Widgets written directly into /Kids are matched to /Opt by position, not by identifier."""
         with make_pdf([A4, A4]) as pdf:
