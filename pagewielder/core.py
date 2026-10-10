@@ -1019,7 +1019,14 @@ def _set_button_states(frame: _KidsFrame) -> None:
     options = field.get(Name.Opt)
     if isinstance(options, Array) and len(options) == len(items):
         field.Opt = Array([options[index] for index in positions])
-        renames = {f"/{old}": f"/{new}" for new, old in enumerate(positions) if old != new}
+        # A positional state is renamed as a whole, to the new position of
+        # the first kept widget showing it, so widgets that share one, as
+        # radio buttons in unison with the same export value do, still do.
+        for new, kid in enumerate(frame.kept):
+            for state in sorted(_on_states(kid)):
+                if state[1:].isdigit():
+                    renames.setdefault(state, f"/{new}")
+        renames = {old: new for old, new in renames.items() if old != new}
 
     kept_positions = set(positions)
     dropped = [kid for index, kid in enumerate(items) if index not in kept_positions]
