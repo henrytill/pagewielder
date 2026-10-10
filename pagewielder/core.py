@@ -266,7 +266,7 @@ class _Resolver:
             remaining page, which a page sharing an ``/Annots`` array or an
             annotation with a removed one keeps.
         name_tree: The ``/Names /Dests`` name tree, or None if the file has
-            none.  It is built once, since over a direct tree that means
+            none or it cannot be read.  It is built once, since over a direct tree that means
             copying the tree.
     """
 
@@ -285,7 +285,16 @@ class _Resolver:
         self._dests: dict[str, Object] = (
             {key: dests[key] for key in dests.keys()} if isinstance(dests, Dictionary) else {}
         )
-        self._names: dict[str | bytes, Object] = dict(self.name_tree.items()) if self.name_tree is not None else {}
+        self._names: dict[str | bytes, Object] = {}
+        if self.name_tree is not None:
+            # Reading the tree is where a malformed one gives out.  It is
+            # then treated as missing, and left as it is, as unreadable
+            # /PageLabels are: a file whose names we cannot resolve is still
+            # a file whose pages we can remove.
+            try:
+                self._names = dict(self.name_tree.items())
+            except PdfError:
+                self.name_tree = None
         self.stale_links: list[Object] = []
         # Indirect /Annots arrays and annotations on the remaining pages.
         placed: set[_ObjGen | None] = set()

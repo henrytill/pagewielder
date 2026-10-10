@@ -231,6 +231,21 @@ class RemovePagesTest(unittest.TestCase):
 
             self.assertEqual(1, len(pdf.pages))
 
+    def test_tolerates_a_malformed_destination_name_tree(self) -> None:
+        """A /Names /Dests tree that cannot be read is left alone, and the rest is still pruned."""
+        with make_pdf([A4, A4]) as pdf:
+            malformed = pdf.make_indirect(Dictionary(Names=Array([Dictionary(), String("x")])))
+            pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=malformed))
+            with pdf.open_outline() as outline:
+                outline.root.append(OutlineItem("Kept", 0))
+                outline.root.append(OutlineItem("Dropped", 1))
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual(1, len(pdf.pages))
+            self.assertEqual(["Kept"], outline_titles(pdf))
+            self.assertEqual(malformed.objgen, pdf.Root.Names.Dests.objgen)
+
     def test_remaps_page_labels(self) -> None:
         """Labels follow the pages they describe."""
         with make_pdf([A4, A4, A4, A4]) as pdf:
