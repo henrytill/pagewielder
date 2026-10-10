@@ -642,6 +642,26 @@ class FormTest(unittest.TestCase):
             self.assertEqual(Name("/1"), widgets[2].AS)
             self.assertEqual(Name("/1"), radio.V)
 
+    def test_keeps_buttons_in_unison_together(self) -> None:
+        """Widgets sharing a positional state still share one after renumbering, and /V keeps its option."""
+        with make_pdf([A4, A4, A4]) as pdf:
+            widgets = [widget(pdf, page) for page in range(3)]
+            for button, state in zip(widgets, ["/0", "/1", "/0"]):
+                on = Stream(pdf, b"")
+                button.AP = Dictionary(N=Dictionary({state: on, "/Off": on}))
+            radio = field(pdf, "radio", widgets)
+            radio.FT = Name.Btn
+            radio.Opt = Array([String("A"), String("B"), String("A")])
+            radio.V = Name("/0")
+            set_form(pdf, [radio])
+
+            core.remove_pages(pdf, {1})
+
+            self.assertEqual(["B", "A"], [str(option) for option in radio.Opt.as_list()])
+            self.assertEqual({"/0", "/Off"}, set(widgets[1].AP.N.keys()))
+            self.assertEqual({"/1", "/Off"}, set(widgets[2].AP.N.keys()))
+            self.assertEqual(Name("/1"), radio.V)
+
     def test_turns_off_a_value_only_a_dropped_button_showed(self) -> None:
         """A button field whose value only a dropped widget turned on is left off."""
         with make_pdf([A4, A4]) as pdf:
