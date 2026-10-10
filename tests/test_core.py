@@ -625,7 +625,8 @@ class FormTest(unittest.TestCase):
             widgets = [widget(pdf, page) for page in range(3)]
             for index, button in enumerate(widgets):
                 on = Stream(pdf, b"")
-                button.AP = Dictionary(N=Dictionary({f"/{index}": on, "/Off": on}))
+                states = Dictionary({f"/{index}": on, "/Off": on})
+                button.AP = Dictionary(N=states, R=states.copy())
                 button.AS = Name.Off
             widgets[2].AS = Name("/2")
             radio = field(pdf, "radio", widgets)
@@ -639,6 +640,7 @@ class FormTest(unittest.TestCase):
             self.assertEqual(["b", "c"], [str(option) for option in radio.Opt.as_list()])
             self.assertEqual({"/0", "/Off"}, set(widgets[1].AP.N.keys()))
             self.assertEqual({"/1", "/Off"}, set(widgets[2].AP.N.keys()))
+            self.assertEqual({"/1", "/Off"}, set(widgets[2].AP.R.keys()))
             self.assertEqual(Name("/1"), widgets[2].AS)
             self.assertEqual(Name("/1"), radio.V)
 

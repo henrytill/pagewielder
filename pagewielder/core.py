@@ -984,7 +984,7 @@ def _rename_states(widget: Object | int, renames: dict[str, str]) -> None:
         return
     appearances = widget.get(Name.AP)
     if isinstance(appearances, Dictionary):
-        for kind in (Name.N, Name.D):
+        for kind in (Name.N, Name.R, Name.D):
             states = appearances.get(kind)
             if isinstance(states, Dictionary):
                 appearances[kind] = Dictionary({renames.get(key, key): value for key, value in states.items()})
