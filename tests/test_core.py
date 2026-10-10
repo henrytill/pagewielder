@@ -404,6 +404,17 @@ class StructTreeTest(unittest.TestCase):
             self.assertEqual([], struct_kid_ids(pdf.Root.StructTreeRoot))
             self.assertEqual([], parent_tree_keys(pdf))
 
+    def test_drops_the_reference_to_an_unplaced_annotation_naming_a_removed_page(self) -> None:
+        """An annotation no /Annots holds leaves the tree when its /P names a removed page."""
+        with make_pdf([A4, A4]) as pdf:
+            annot = text_annotation(pdf, page=pdf.pages[1].obj)
+            elem = struct_elem(pdf, Dictionary(Type=Name.OBJR, Obj=annot))
+            set_struct_tree(pdf, [elem], {})
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([], struct_kid_ids(pdf.Root.StructTreeRoot))
+
     def test_keeps_an_annotation_shared_with_a_remaining_page(self) -> None:
         """An annotation in an /Annots array a remaining page shares stays in the tree."""
         with make_pdf([A4, A4]) as pdf:

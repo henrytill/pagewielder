@@ -425,6 +425,24 @@ class _Resolver:
         """
         return obj is not None and _indirect_id(obj) in self._removed_annot_ids
 
+    def went_with_removed_pages(self, obj: Object | None) -> bool:
+        """Say whether obj is an annotation that went with the removed pages.
+
+        An annotation is placed by the ``/Annots`` holding it, whatever its
+        ``/P`` says, since ``/P`` may be missing or name a page sharing it.
+        One no page's ``/Annots`` holds has only its ``/P`` to go by.
+
+        Args:
+            obj: Any object.
+
+        Returns:
+            True if obj is in ``removed_annots``, or is held by no page and
+            names a removed page as its ``/P``.
+        """
+        if self.is_removed_annotation(obj):
+            return True
+        return isinstance(obj, Dictionary) and not self.is_placed_annotation(obj) and self.is_removed(obj.get(Name.P))
+
     def is_placed_annotation(self, obj: Object | None) -> bool:
         """Say whether obj is an annotation on a remaining page.
 
@@ -688,11 +706,11 @@ class _StructTreePruner:
     def _keep_object_reference(self, objr: Dictionary, page: Object | None) -> bool:
         resolver = self._resolver
         obj = objr.get(Name.Obj)
-        if resolver.is_removed_annotation(obj) or resolver.is_stale_link(obj):
+        if resolver.went_with_removed_pages(obj) or resolver.is_stale_link(obj):
             return False
-        # An annotation is placed by the /Annots holding it, whatever /Pg
-        # says, since its /Pg and /P may be missing or name a page sharing
-        # it.  Anything else, such as a form XObject, has only /Pg to go by.
+        # A placed annotation is kept whatever /Pg says, since /Pg may name a
+        # page sharing it.  Anything else, such as a form XObject, has only
+        # /Pg to go by.
         if not resolver.is_placed_annotation(obj) and resolver.is_removed(objr.get(Name.Pg, page)):
             return False
         if resolver.is_removed(objr.get(Name.Pg)):
@@ -800,28 +818,6 @@ class _FieldFrame(typing.NamedTuple):
     kept: list[Object]
 
 
-def _is_removed_widget(resolver: _Resolver, obj: Object) -> bool:
-    """Say whether obj is a widget annotation that went with the removed pages.
-
-    Args:
-        resolver: The resolver for this remove_pages() call.
-        obj: A field, a widget, or a field and widget in one.
-
-    Returns:
-        True if obj was on a removed page and is on no remaining one.
-    """
-    if not isinstance(obj, Dictionary):
-        return False
-    if resolver.is_removed_annotation(obj):
-        return True
-    # A widget no page's /Annots holds has only its /P to go by.
-    return (
-        obj.get(Name.Subtype) == Name.Widget
-        and not resolver.is_placed_annotation(obj)
-        and resolver.is_removed(obj.get(Name.P))
-    )
-
-
 def _enter_field(holder: Dictionary, key: Name) -> _FieldFrame | None:
     """Start pruning holder's kids, if it has any.
 
@@ -886,7 +882,7 @@ class _FormPruner:
                     self._drop(frame.holder)
 
     def _enter(self, kid: Object) -> _FieldFrame | None:
-        if not isinstance(kid, Dictionary) or _is_removed_widget(self._resolver, kid):
+        if not isinstance(kid, Dictionary) or self._resolver.went_with_removed_pages(kid):
             return None
         ident = _indirect_id(kid)
         if ident is not None:
@@ -896,7 +892,7 @@ class _FormPruner:
         return _enter_field(kid, Name.Kids)
 
     def _keep(self, kid: Object) -> bool:
-        if _is_removed_widget(self._resolver, kid):
+        if self._resolver.went_with_removed_pages(kid):
             self._drop(kid)
             return False
         return _indirect_id(kid) not in self.dropped
