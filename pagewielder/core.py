@@ -98,6 +98,40 @@ def _tree_object(pdf: Pdf, tree: Dictionary) -> Object:
     return tree if tree.is_indirect else pdf.make_indirect(tree.copy())
 
 
+@typing.overload
+def _read_tree(
+    pdf: Pdf, tree: Object | None, kind: type[NameTree]
+) -> tuple[NameTree, dict[str | bytes, Object]] | None: ...
+@typing.overload
+def _read_tree(
+    pdf: Pdf, tree: Object | None, kind: type[NumberTree]
+) -> tuple[NumberTree, dict[int, Object]] | None: ...
+def _read_tree(
+    pdf: Pdf, tree: Object | None, kind: type[NameTree] | type[NumberTree]
+) -> tuple[NameTree | NumberTree, dict[typing.Any, Object]] | None:
+    """Wrap a name or number tree over ``_tree_object()`` and read its entries.
+
+    Args:
+        pdf: The PDF file the tree belongs to.
+        tree: The tree's root dictionary, or whatever stands in its place.
+        kind: ``NameTree`` or ``NumberTree``.
+
+    Returns:
+        The wrapped tree and its entries, or None if tree is not a
+        dictionary or cannot be read.
+    """
+    if not isinstance(tree, Dictionary):
+        return None
+    wrapped = kind(_tree_object(pdf, tree))
+    # Reading a tree is where a malformed one gives out.  It is then treated
+    # as missing, and left as it is: a file with a tree we cannot read is
+    # still a file whose pages we can remove.
+    try:
+        return wrapped, dict(wrapped.items())
+    except PdfError:
+        return None
+
+
 def _page_labels(pdf: Pdf) -> list[_PageLabel | None]:
     """Work out the label in force for each page of a document.
 
@@ -109,16 +143,10 @@ def _page_labels(pdf: Pdf) -> list[_PageLabel | None]:
         if no range covers it, or an empty list if the file has no usable
         ``/PageLabels``.
     """
-    tree = pdf.Root.get(Name.PageLabels)
-    if not isinstance(tree, Dictionary):
+    read = _read_tree(pdf, pdf.Root.get(Name.PageLabels), NumberTree)
+    if read is None:
         return []
-
-    # Reading the tree is where a malformed one gives out, and a file we
-    # cannot label is still a file whose pages we can remove.
-    try:
-        ranges = list(NumberTree(_tree_object(pdf, tree)).items())
-    except PdfError:
-        return []
+    ranges = list(read[1].items())
     count = len(pdf.pages)
     labels: list[_PageLabel | None] = [None] * count
 
@@ -213,26 +241,25 @@ def _delete_from_tree(holder: Object, key: Name, tree: NameTree | NumberTree, st
     holder[key] = tree.obj
     for name in stale:
         # A tree finds a key by binary search, which misses entries in a
-        # tree whose keys are out of order.  Such a tree breaks the spec,
-        # and keeping its stale entry beats removing no pages.
-        with contextlib.suppress(KeyError):
+        # tree whose keys are out of order, and may trip over a malformed
+        # part the read did not.  Such a tree breaks the spec, and keeping
+        # its stale entry beats removing no pages.
+        with contextlib.suppress(KeyError, PdfError):
             del tree[name]
 
 
-def _dests_name_tree(pdf: Pdf) -> NameTree | None:
-    """Get the name tree holding the document's named destinations.
+def _dests_name_tree(pdf: Pdf) -> tuple[NameTree, dict[str | bytes, Object]] | None:
+    """Get and read the name tree holding the document's named destinations.
 
     Args:
         pdf: A PDF file.
 
     Returns:
-        The ``/Names /Dests`` name tree, or None if the file has none.
+        The ``/Names /Dests`` name tree and its entries, or None if the file
+        has none or it cannot be read.
     """
     names = pdf.Root.get(Name.Names)
-    tree = names.get(Name.Dests) if isinstance(names, Dictionary) else None
-    if not isinstance(tree, Dictionary):
-        return None
-    return NameTree(_tree_object(pdf, tree))
+    return _read_tree(pdf, names.get(Name.Dests) if isinstance(names, Dictionary) else None, NameTree)
 
 
 def _indirect_id(obj: object) -> _ObjGen | None:
@@ -280,21 +307,15 @@ class _Resolver:
         self.pdf = pdf
         self.removed_pages = removed_pages
         self.removed: set[_ObjGen] = {page.objgen for page in removed_pages}
-        self.name_tree = _dests_name_tree(pdf)
+        read = _dests_name_tree(pdf)
+        self.name_tree: NameTree | None = None
+        self._names: dict[str | bytes, Object] = {}
+        if read is not None:
+            self.name_tree, self._names = read
         dests = pdf.Root.get(Name.Dests)
         self._dests: dict[str, Object] = (
             {key: dests[key] for key in dests.keys()} if isinstance(dests, Dictionary) else {}
         )
-        self._names: dict[str | bytes, Object] = {}
-        if self.name_tree is not None:
-            # Reading the tree is where a malformed one gives out.  It is
-            # then treated as missing, and left as it is, as unreadable
-            # /PageLabels are: a file whose names we cannot resolve is still
-            # a file whose pages we can remove.
-            try:
-                self._names = dict(self.name_tree.items())
-            except PdfError:
-                self.name_tree = None
         self.stale_links: list[Object] = []
         # Indirect /Annots arrays and annotations on the remaining pages.
         placed: set[_ObjGen | None] = set()
@@ -714,24 +735,19 @@ def _prune_struct_tree(resolver: _Resolver) -> None:
     dropped = pruner.dropped
 
     stale_keys = _stale_parent_tree_keys(resolver)
-    # Reading a tree is where a malformed one gives out.  It is then left as
-    # it is, as unreadable /PageLabels are: a file whose tree we cannot prune
-    # is still a file whose pages we can remove.
-    parent_tree = root.get(Name.ParentTree)
-    if isinstance(parent_tree, Dictionary):
-        numbers = NumberTree(_tree_object(pdf, parent_tree))
-        with contextlib.suppress(PdfError):
-            # An entry naming only dropped elements goes too, whatever its
-            # key belongs to: a form XObject drawn on a removed page, say.
-            stale_keys |= {number for number, value in numbers.items() if _names_only_dropped(value, dropped)}
-            _delete_from_tree(root, Name.ParentTree, numbers, stale_keys)
+    read_numbers = _read_tree(pdf, root.get(Name.ParentTree), NumberTree)
+    if read_numbers is not None:
+        numbers, entries = read_numbers
+        # An entry naming only dropped elements goes too, whatever its key
+        # belongs to: a form XObject drawn on a removed page, say.
+        stale_keys |= {number for number, value in entries.items() if _names_only_dropped(value, dropped)}
+        _delete_from_tree(root, Name.ParentTree, numbers, stale_keys)
 
-    id_tree = root.get(Name.IDTree)
-    if isinstance(id_tree, Dictionary) and dropped:
-        ids = NameTree(_tree_object(pdf, id_tree))
-        with contextlib.suppress(PdfError):
-            stale_ids = [name for name, elem in ids.items() if _indirect_id(elem) in dropped]
-            _delete_from_tree(root, Name.IDTree, ids, stale_ids)
+    read_ids = _read_tree(pdf, root.get(Name.IDTree), NameTree) if dropped else None
+    if read_ids is not None:
+        ids, id_entries = read_ids
+        stale_ids = [name for name, elem in id_entries.items() if _indirect_id(elem) in dropped]
+        _delete_from_tree(root, Name.IDTree, ids, stale_ids)
 
 
 def remove_pages(pdf: Pdf, pages: Pages) -> None:
