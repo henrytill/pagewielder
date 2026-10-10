@@ -584,16 +584,32 @@ class _KidsFrame(typing.NamedTuple):
         page: The page holder's kids are on unless they say otherwise, for
             a structure element.
         items: Holder's kids, as they were.
-        pending: The kids still to be decided.
+        pending: The kids still to be decided, with their positions in
+            items.
         kept: The kids decided so far to keep.
+        positions: The positions in items of the kids in kept, since a
+            direct kid has no identifier to find it by.
+        position: Holder's own position among its parent's kids.
     """
 
     holder: Dictionary
     key: Name
     page: Object | None
     items: list[Object | int]
-    pending: typing.Iterator[Object | int]
+    pending: typing.Iterator[tuple[int, Object | int]]
     kept: list[Object | int]
+    positions: list[int]
+    position: int = -1
+
+    def keep(self, kid: Object | int, index: int) -> None:
+        """Keep a kid.
+
+        Args:
+            kid: The kid.
+            index: Its position in items.
+        """
+        self.kept.append(kid)
+        self.positions.append(index)
 
 
 def _kids_frame(holder: Dictionary, key: Name, page: Object | None = None) -> _KidsFrame | None:
@@ -615,7 +631,7 @@ def _kids_frame(holder: Dictionary, key: Name, page: Object | None = None) -> _K
     items: list[Object | int] = [*kids.as_list()] if isinstance(kids, Array) else [kids]
     if not items:
         return None
-    return _KidsFrame(holder, key, page, items, iter(items), [])
+    return _KidsFrame(holder, key, page, items, enumerate(items), [], [])
 
 
 def _set_kids(frame: _KidsFrame) -> None:
@@ -664,19 +680,19 @@ class _TreePruner:
         stack = [start] if start is not None else []
         while stack:
             frame = stack[-1]
-            for kid in frame.pending:
+            for index, kid in frame.pending:
                 child = self._enter(kid)
                 if child is not None:
-                    stack.append(child)
+                    stack.append(child._replace(position=index))
                     break
                 if self._keep(kid, frame):
-                    frame.kept.append(kid)
+                    frame.keep(kid, index)
             else:
                 stack.pop()
                 if not stack:
                     _set_kids(frame)
                 elif self._leave(frame):
-                    stack[-1].kept.append(frame.holder)
+                    stack[-1].keep(frame.holder, frame.position)
 
     def _first_visit(self, node: Object) -> bool:
         """Note node as entered, saying whether it was entered before.
@@ -1012,8 +1028,7 @@ def _set_button_states(frame: _KidsFrame) -> None:
     field, items = frame.holder, frame.items
     if len(frame.kept) == len(items) or _field_type(field) != Name.Btn:
         return
-    kept_ids = {_indirect_id(kid) for kid in frame.kept}
-    positions = [index for index, kid in enumerate(items) if _indirect_id(kid) in kept_ids]
+    positions = frame.positions
 
     renames: dict[str, str] = {}
     options = field.get(Name.Opt)
