@@ -34,6 +34,14 @@ def link(pdf: Pdf, dest: Object | None = None, action: Object | None = None) -> 
     return pdf.make_indirect(annot)
 
 
+def text_annotation(pdf: Pdf, page: Object | None = None) -> Object:
+    """Build an indirect text annotation, naming a page as its /P if given."""
+    annot = Dictionary(Type=Name.Annot, Subtype=Name.Text, Rect=Array([0, 0, 10, 10]))
+    if page is not None:
+        annot.P = page
+    return pdf.make_indirect(annot)
+
+
 def set_annotations(pdf: Pdf, index: int, annots: Sequence[Object]) -> None:
     """Give the page at a 0-based index an indirect /Annots array."""
     pdf.pages[index].Annots = pdf.make_indirect(Array(annots))
