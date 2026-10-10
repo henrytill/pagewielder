@@ -989,17 +989,27 @@ def _on_states(widget: Object | int) -> set[str]:
     return set(normal.keys()) - {"/Off"} if isinstance(normal, Dictionary) else set()
 
 
-def _rename_states(widget: Object | int, renames: dict[str, str]) -> None:
+def _rename_states(widget: Object | int, renames: dict[str, str], done: set[_ObjGen]) -> None:
     """Rename a button widget's appearance states and its current state.
 
     Args:
         widget: A widget annotation.
         renames: New names by old, all applied at once.
+        done: Identifiers of the indirect widgets and ``/AP`` dictionaries
+            renamed already, which this adds to.  Renames can chain, ``/2`` to
+            ``/1`` and ``/1`` to ``/0``, so a widget listed twice, or an
+            ``/AP`` shared by widgets in unison, is renamed only once.
     """
-    if not isinstance(widget, Dictionary):
+    ident = _indirect_id(widget)
+    if not isinstance(widget, Dictionary) or ident in done:
         return
+    if ident is not None:
+        done.add(ident)
     appearances = widget.get(Name.AP)
-    if isinstance(appearances, Dictionary):
+    shared = _indirect_id(appearances)
+    if isinstance(appearances, Dictionary) and shared not in done:
+        if shared is not None:
+            done.add(shared)
         for kind in (Name.N, Name.R, Name.D):
             states = appearances.get(kind)
             if isinstance(states, Dictionary):
@@ -1047,8 +1057,9 @@ def _set_button_states(frame: _KidsFrame) -> None:
     dropped = [kid for index, kid in enumerate(items) if index not in kept_positions]
     kept_states = set[str]().union(*map(_on_states, frame.kept))
     dropped_states = set[str]().union(*map(_on_states, dropped))
+    done: set[_ObjGen] = set()
     for widget in frame.kept:
-        _rename_states(widget, renames)
+        _rename_states(widget, renames, done)
     for key in (Name.V, Name.DV):
         value = field.get(key)
         if value is None:
