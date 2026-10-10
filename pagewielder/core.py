@@ -796,8 +796,10 @@ def remove_pages(pdf: Pdf, pages: Pages) -> None:
 
     Link annotations on the remaining pages that point at a removed page are
     deleted, and the structure tree of a tagged PDF loses what belonged to
-    the removed pages and those links.  Article threads are left as they
-    are, and a file using them keeps the pages they name in the saved file.
+    the removed pages and those links.  An annotation a removed page shared
+    with a remaining one names the first remaining page holding it as its
+    ``/P``.  Article threads and the interactive form are left as they are,
+    and a file using them keeps the pages they name in the saved file.
 
     Args:
         pdf: A PDF file.
