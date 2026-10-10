@@ -293,7 +293,8 @@ class _Resolver:
             remaining page, which a page sharing an ``/Annots`` array or an
             annotation with a removed one keeps.
         name_tree: The ``/Names /Dests`` name tree, or None if the file has
-            none or it cannot be read.  It is built once, since over a direct tree that means
+            none or it cannot be read.
+        names: The entries of name_tree, read once.  It is built once, since over a direct tree that means
             copying the tree.
     """
 
@@ -309,9 +310,9 @@ class _Resolver:
         self.removed: set[_ObjGen] = {page.objgen for page in removed_pages}
         read = _dests_name_tree(pdf)
         self.name_tree: NameTree | None = None
-        self._names: dict[str | bytes, Object] = {}
+        self.names: dict[str | bytes, Object] = {}
         if read is not None:
-            self.name_tree, self._names = read
+            self.name_tree, self.names = read
         dests = pdf.Root.get(Name.Dests)
         self._dests: dict[str, Object] = (
             {key: dests[key] for key in dests.keys()} if isinstance(dests, Dictionary) else {}
@@ -345,7 +346,7 @@ class _Resolver:
         # Not cached: each hop is a dict lookup in the copies, about what a
         # cache lookup would cost, and a cache would need keys that keep a
         # Name and a String of the same text apart.
-        return (self._dests if isinstance(name, Name) else self._names).get(str(name))
+        return (self._dests if isinstance(name, Name) else self.names).get(str(name))
 
     def _destination_page(self, dest: Object | int | None) -> Dictionary | None:
         """Find the page object a destination points at, if it can be determined.
@@ -512,8 +513,7 @@ def _prune_destinations(resolver: _Resolver) -> None:
 
     name_tree = resolver.name_tree
     if name_tree is not None:
-        # Collected first, since a tree cannot be changed while it is walked.
-        stale_names = [name for name, dest in name_tree.items() if resolver.targets_removed(dest)]
+        stale_names = [name for name, dest in resolver.names.items() if resolver.targets_removed(dest)]
         _delete_from_tree(root.Names, Name.Dests, name_tree, stale_names)
 
     open_action = root.get(Name.OpenAction)
