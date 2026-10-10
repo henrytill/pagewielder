@@ -664,6 +664,24 @@ class FormTest(unittest.TestCase):
             self.assertEqual({"/1", "/Off"}, set(widgets[2].AP.N.keys()))
             self.assertEqual(Name("/1"), radio.V)
 
+    def test_trims_button_options_for_direct_widgets(self) -> None:
+        """Widgets written directly into /Kids are matched to /Opt by position, not by identifier."""
+        with make_pdf([A4, A4]) as pdf:
+            on = Stream(pdf, b"")
+            gone = Dictionary(Subtype=Name.Widget, P=pdf.pages[1].obj, AP=Dictionary(N=Dictionary({"/0": on})))
+            loose = Dictionary(Subtype=Name.Widget, AP=Dictionary(N=Dictionary({"/1": on})))
+            placed = widget(pdf, 0)
+            placed.AP = Dictionary(N=Dictionary({"/2": on}))
+            radio = pdf.make_indirect(Dictionary(T=String("radio"), FT=Name.Btn, Kids=Array([gone, loose, placed])))
+            radio.Opt = Array([String("A"), String("B"), String("C")])
+            radio.V = Name("/2")
+            set_form(pdf, [radio])
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual(["B", "C"], [str(option) for option in radio.Opt.as_list()])
+            self.assertEqual(Name("/1"), radio.V)
+
     def test_turns_off_a_value_only_a_dropped_button_showed(self) -> None:
         """A button field whose value only a dropped widget turned on is left off."""
         with make_pdf([A4, A4]) as pdf:
