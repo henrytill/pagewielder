@@ -706,6 +706,25 @@ class FormTest(unittest.TestCase):
             self.assertEqual(["B", "C"], [str(option) for option in radio.Opt.as_list()])
             self.assertEqual(Name.c, radio.V)
 
+    def test_turns_off_a_positional_value_only_a_dropped_button_showed(self) -> None:
+        """A value naming a dropped widget's position is turned off, not handed to the widget renumbered into it."""
+        with make_pdf([A4, A4, A4]) as pdf:
+            widgets = [widget(pdf, page) for page in range(3)]
+            for index, button in enumerate(widgets):
+                on = Stream(pdf, b"")
+                button.AP = Dictionary(N=Dictionary({f"/{index}": on, "/Off": on}))
+            radio = field(pdf, "radio", widgets)
+            radio.FT = Name.Btn
+            radio.Opt = Array([String("a"), String("b"), String("c")])
+            radio.V = Name("/0")
+            radio.DV = Name("/2")
+            set_form(pdf, [radio])
+
+            core.remove_pages(pdf, {1})
+
+            self.assertEqual(Name.Off, radio.V)
+            self.assertEqual(Name("/1"), radio.DV)
+
     def test_turns_off_a_value_only_a_dropped_button_showed(self) -> None:
         """A button field whose value only a dropped widget turned on is left off."""
         with make_pdf([A4, A4]) as pdf:

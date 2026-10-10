@@ -1062,6 +1062,12 @@ def _set_button_states(frame: _KidsFrame) -> None:
     if len(frame.kept) == len(items) or _field_type(field) != Name.Btn:
         return
 
+    # Read before any renumbering, so that a dropped widget's state is
+    # compared with the kept widgets' old names, not their new ones.
+    kept_positions = set(frame.positions)
+    dropped = [kid for index, kid in enumerate(items) if index not in kept_positions]
+    gone = set[str]().union(*map(_on_states, dropped)) - set[str]().union(*map(_on_states, frame.kept))
+
     renames: dict[str, str] = {}
     options = field.get(Name.Opt)
     if isinstance(options, Array) and len(options) == len(items):
@@ -1074,15 +1080,11 @@ def _set_button_states(frame: _KidsFrame) -> None:
                     for old, new in renames.items():
                         _rename_states(widget, old, new)
 
-    kept_positions = set(frame.positions)
-    dropped = [kid for index, kid in enumerate(items) if index not in kept_positions]
-    kept_states = set[str]().union(*map(_on_states, frame.kept))
-    dropped_states = set[str]().union(*map(_on_states, dropped))
     for key in (Name.V, Name.DV):
         value = field.get(key)
         if value is None:
             continue
-        if str(value) in dropped_states - kept_states:
+        if str(value) in gone:
             field[key] = Name.Off
         elif str(value) in renames:
             field[key] = Name(renames[str(value)])
