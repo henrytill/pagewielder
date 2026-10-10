@@ -47,6 +47,10 @@ class _PageLabel(typing.NamedTuple):
 # the hops keeps a name that resolves back to itself from looping forever.
 _MAX_DESTINATION_HOPS = 8
 
+# Field types are inherited down the field tree, and looking one up follows
+# /Parent; bounding the climb keeps a /Parent loop from running forever.
+_MAX_FIELD_DEPTH = 64
+
 
 def _get_dimensions(page: Page) -> Dimensions:
     """Get the dimensions of a page in a PDF file.
@@ -922,7 +926,9 @@ class _FormPruner(_TreePruner):
         _set_kids(frame)
         if not frame.kept:
             self._drop(frame.holder)
-        return bool(frame.kept)
+            return False
+        _set_button_options(frame)
+        return True
 
     def _keep(self, kid: Object | int, frame: _KidsFrame) -> bool:
         # A widget has no kids, so it is decided here, as is a field and
@@ -931,6 +937,47 @@ class _FormPruner(_TreePruner):
             self._drop(kid)
             return False
         return self._was_kept(kid)
+
+
+def _field_type(field: Dictionary) -> Object | None:
+    """Get a field's type, ``/FT``, which it may inherit from its ancestors.
+
+    Args:
+        field: A form field.
+
+    Returns:
+        The field's type, or None if neither it nor an ancestor has one.
+    """
+    node: Object | None = field
+    for _ in range(_MAX_FIELD_DEPTH):
+        if not isinstance(node, Dictionary):
+            break
+        kind = node.get(Name.FT)
+        if kind is not None:
+            return kind
+        node = node.get(Name.Parent)
+    return None
+
+
+def _set_button_options(frame: _KidsFrame) -> None:
+    """Drop the export values of a button field's dropped widgets.
+
+    A check box or radio button field's ``/Opt`` holds one export value per
+    kid, matched by position, so pruning ``/Kids`` alone would shift every
+    later widget onto another's value.  ``/Opt`` of any other length, or of
+    a choice field, where it lists the options, is left as it is.
+
+    Args:
+        frame: A field's frame, with its kids all decided.
+    """
+    field, items = frame.holder, frame.items
+    options = field.get(Name.Opt)
+    if len(frame.kept) == len(items) or not isinstance(options, Array) or len(options) != len(items):
+        return
+    if _field_type(field) != Name.Btn:
+        return
+    kept = {_indirect_id(kid) for kid in frame.kept}
+    field.Opt = Array([option for kid, option in zip(items, options.as_list()) if _indirect_id(kid) in kept])
 
 
 def _prune_form(resolver: _Resolver) -> None:

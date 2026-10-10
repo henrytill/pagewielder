@@ -601,6 +601,24 @@ class FormTest(unittest.TestCase):
             self.assertEqual([kept.objgen], kid_ids(node, Name.Kids))
             self.assertEqual(1, saved_page_objects(pdf))
 
+    def test_drops_the_export_values_of_dropped_buttons(self) -> None:
+        """A button field's /Opt loses the export values of the widgets dropped, and a choice field's stays."""
+        with make_pdf([A4, A4]) as pdf:
+            yes, no = widget(pdf, 1), widget(pdf, 0)
+            radio = field(pdf, "radio", [yes, no])
+            radio.FT = Name.Btn
+            radio.Opt = Array([String("Yes"), String("No")])
+            choice = field(pdf, "choice", [widget(pdf, 1), widget(pdf, 0)])
+            choice.FT = Name.Ch
+            choice.Opt = Array([String("a"), String("b")])
+            set_form(pdf, [radio, choice])
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([no.objgen], kid_ids(radio, Name.Kids))
+            self.assertEqual(["No"], [str(option) for option in radio.Opt.as_list()])
+            self.assertEqual(["a", "b"], [str(option) for option in choice.Opt.as_list()])
+
     def test_drops_emptied_fields_up_the_tree_and_from_the_calculation_order(self) -> None:
         """Fields left with no kids go, recursively, and leave /CO."""
         with make_pdf([A4, A4]) as pdf:
