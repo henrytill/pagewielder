@@ -927,7 +927,7 @@ class _FormPruner(_TreePruner):
         if not frame.kept:
             self._drop(frame.holder)
             return False
-        _set_button_options(frame)
+        _set_button_states(frame)
         return True
 
     def _keep(self, kid: Object | int, frame: _KidsFrame) -> bool:
@@ -959,25 +959,82 @@ def _field_type(field: Dictionary) -> Object | None:
     return None
 
 
-def _set_button_options(frame: _KidsFrame) -> None:
-    """Drop the export values of a button field's dropped widgets.
+def _on_states(widget: Object | int) -> set[str]:
+    """List the names of the states a button widget turns its field on with.
+
+    Args:
+        widget: A widget annotation.
+
+    Returns:
+        The keys of its normal appearances, ``/AP /N``, other than ``/Off``.
+    """
+    appearances = widget.get(Name.AP) if isinstance(widget, Dictionary) else None
+    normal = appearances.get(Name.N) if isinstance(appearances, Dictionary) else None
+    return set(normal.keys()) - {"/Off"} if isinstance(normal, Dictionary) else set()
+
+
+def _rename_states(widget: Object | int, renames: dict[str, str]) -> None:
+    """Rename a button widget's appearance states and its current state.
+
+    Args:
+        widget: A widget annotation.
+        renames: New names by old, all applied at once.
+    """
+    if not isinstance(widget, Dictionary):
+        return
+    appearances = widget.get(Name.AP)
+    if isinstance(appearances, Dictionary):
+        for kind in (Name.N, Name.D):
+            states = appearances.get(kind)
+            if isinstance(states, Dictionary):
+                appearances[kind] = Dictionary({renames.get(key, key): value for key, value in states.items()})
+    state = widget.get(Name.AS)
+    if state is not None and str(state) in renames:
+        widget.AS = Name(renames[str(state)])
+
+
+def _set_button_states(frame: _KidsFrame) -> None:
+    """Keep a button field's states in step with the widgets it kept.
 
     A check box or radio button field's ``/Opt`` holds one export value per
     kid, matched by position, so pruning ``/Kids`` alone would shift every
-    later widget onto another's value.  ``/Opt`` of any other length, or of
-    a choice field, where it lists the options, is left as it is.
+    later widget onto another's value.  ``/Opt`` loses the dropped widgets'
+    entries, and on states named by position, ``/0``, ``/1`` and so on, are
+    renumbered to match, in the kept widgets and in the field's ``/V`` and
+    ``/DV``.  A value that only a dropped widget turned on becomes
+    ``/Off``, since no widget left can show it.  ``/Opt`` of any other
+    length, or of a choice field, where it lists the options, is left as
+    it is.
 
     Args:
         frame: A field's frame, with its kids all decided.
     """
     field, items = frame.holder, frame.items
+    if len(frame.kept) == len(items) or _field_type(field) != Name.Btn:
+        return
+    kept_ids = {_indirect_id(kid) for kid in frame.kept}
+    positions = [index for index, kid in enumerate(items) if _indirect_id(kid) in kept_ids]
+
+    renames: dict[str, str] = {}
     options = field.get(Name.Opt)
-    if len(frame.kept) == len(items) or not isinstance(options, Array) or len(options) != len(items):
-        return
-    if _field_type(field) != Name.Btn:
-        return
-    kept = {_indirect_id(kid) for kid in frame.kept}
-    field.Opt = Array([option for kid, option in zip(items, options.as_list()) if _indirect_id(kid) in kept])
+    if isinstance(options, Array) and len(options) == len(items):
+        field.Opt = Array([options[index] for index in positions])
+        renames = {f"/{old}": f"/{new}" for new, old in enumerate(positions) if old != new}
+
+    kept_positions = set(positions)
+    dropped = [kid for index, kid in enumerate(items) if index not in kept_positions]
+    kept_states = set[str]().union(*map(_on_states, frame.kept))
+    dropped_states = set[str]().union(*map(_on_states, dropped))
+    for widget in frame.kept:
+        _rename_states(widget, renames)
+    for key in (Name.V, Name.DV):
+        value = field.get(key)
+        if value is None:
+            continue
+        if str(value) in dropped_states - kept_states:
+            field[key] = Name.Off
+        elif str(value) in renames:
+            field[key] = Name(renames[str(value)])
 
 
 def _prune_form(resolver: _Resolver) -> None:

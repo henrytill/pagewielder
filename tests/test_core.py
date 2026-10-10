@@ -619,6 +619,47 @@ class FormTest(unittest.TestCase):
             self.assertEqual(["No"], [str(option) for option in radio.Opt.as_list()])
             self.assertEqual(["a", "b"], [str(option) for option in choice.Opt.as_list()])
 
+    def test_renumbers_positional_button_states(self) -> None:
+        """On states named by position follow their widgets to their new positions, in /AS, /AP and /V."""
+        with make_pdf([A4, A4, A4]) as pdf:
+            widgets = [widget(pdf, page) for page in range(3)]
+            for index, button in enumerate(widgets):
+                on = Stream(pdf, b"")
+                button.AP = Dictionary(N=Dictionary({f"/{index}": on, "/Off": on}))
+                button.AS = Name.Off
+            widgets[2].AS = Name("/2")
+            radio = field(pdf, "radio", widgets)
+            radio.FT = Name.Btn
+            radio.Opt = Array([String("a"), String("b"), String("c")])
+            radio.V = Name("/2")
+            set_form(pdf, [radio])
+
+            core.remove_pages(pdf, {1})
+
+            self.assertEqual(["b", "c"], [str(option) for option in radio.Opt.as_list()])
+            self.assertEqual({"/0", "/Off"}, set(widgets[1].AP.N.keys()))
+            self.assertEqual({"/1", "/Off"}, set(widgets[2].AP.N.keys()))
+            self.assertEqual(Name("/1"), widgets[2].AS)
+            self.assertEqual(Name("/1"), radio.V)
+
+    def test_turns_off_a_value_only_a_dropped_button_showed(self) -> None:
+        """A button field whose value only a dropped widget turned on is left off."""
+        with make_pdf([A4, A4]) as pdf:
+            yes, no = widget(pdf, 1), widget(pdf, 0)
+            on = Stream(pdf, b"")
+            yes.AP = Dictionary(N=Dictionary(Yes=on, Off=on))
+            no.AP = Dictionary(N=Dictionary(No=on, Off=on))
+            radio = field(pdf, "radio", [yes, no])
+            radio.FT = Name.Btn
+            radio.V = Name.Yes
+            radio.DV = Name.No
+            set_form(pdf, [radio])
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual(Name.Off, radio.V)
+            self.assertEqual(Name.No, radio.DV)
+
     def test_drops_emptied_fields_up_the_tree_and_from_the_calculation_order(self) -> None:
         """Fields left with no kids go, recursively, and leave /CO."""
         with make_pdf([A4, A4]) as pdf:
