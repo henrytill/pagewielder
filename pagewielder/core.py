@@ -293,9 +293,9 @@ class _Resolver:
             remaining page, which a page sharing an ``/Annots`` array or an
             annotation with a removed one keeps.
         name_tree: The ``/Names /Dests`` name tree, or None if the file has
-            none or it cannot be read.
-        names: The entries of name_tree, read once.  It is built once, since over a direct tree that means
-            copying the tree.
+            none or it cannot be read.  It is built once, since over a
+            direct tree that means copying the tree.
+        names: The entries of name_tree, read once.
     """
 
     def __init__(self, pdf: Pdf, removed_pages: list[Dictionary]) -> None:
