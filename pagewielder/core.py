@@ -274,6 +274,21 @@ def _indirect_id(obj: object) -> _ObjGen | None:
     return obj.objgen if isinstance(obj, Object) and obj.is_indirect else None
 
 
+def _page_annotations(pdf: Pdf) -> typing.Iterator[tuple[Dictionary, Array]]:
+    """Yield each page of pdf that has an ``/Annots`` array, with the array.
+
+    Args:
+        pdf: A PDF file.
+
+    Yields:
+        Each page object and its ``/Annots`` array, in page order.
+    """
+    for page in pdf.pages:
+        annots = page.obj.get(Name.Annots)
+        if isinstance(annots, Array):
+            yield page.obj, annots
+
+
 class _Resolver:
     """Decides which targets point at the pages one remove_pages() call removes.
 
@@ -320,18 +335,18 @@ class _Resolver:
         self.stale_links: list[Object] = []
         # Indirect /Annots arrays and annotations on the remaining pages.
         placed: set[_ObjGen | None] = set()
-        for page in pdf.pages:
-            annots = page.obj.get(Name.Annots)
-            if isinstance(annots, Array):
-                placed |= {_indirect_id(obj) for obj in [annots, *annots.as_list()]}
-                self.stale_links += [annot for annot in annots.as_list() if self.is_stale_link(annot)]
+        for _, annots in _page_annotations(pdf):
+            placed |= {_indirect_id(obj) for obj in [annots, *annots.as_list()]}
+            self.stale_links += [annot for annot in annots.as_list() if self.is_stale_link(annot)]
         placed.discard(None)
         self._placed_annots = placed
         self.removed_annots: list[Object] = []
         for removed_page in removed_pages:
-            annots = removed_page.get(Name.Annots)
-            if isinstance(annots, Array) and _indirect_id(annots) not in placed:
-                self.removed_annots += [annot for annot in annots.as_list() if _indirect_id(annot) not in placed]
+            removed_annots = removed_page.get(Name.Annots)
+            if isinstance(removed_annots, Array) and _indirect_id(removed_annots) not in placed:
+                self.removed_annots += [
+                    annot for annot in removed_annots.as_list() if _indirect_id(annot) not in placed
+                ]
         self._removed_annot_ids = {_indirect_id(annot) for annot in self.removed_annots} - {None}
 
     def _resolve_named_destination(self, name: Name | String) -> Object | None:
@@ -479,10 +494,7 @@ def _prune_links(resolver: _Resolver) -> None:
     """
     # A page sharing an /Annots array already pruned for another finds
     # nothing left to delete.
-    for page in resolver.pdf.pages:
-        annots = page.obj.get(Name.Annots)
-        if not isinstance(annots, Array):
-            continue
+    for _, annots in _page_annotations(resolver.pdf):
         stale = [index for index, annot in enumerate(annots.as_list()) if resolver.is_stale_link(annot)]
         for index in reversed(stale):
             del annots[index]
@@ -500,13 +512,10 @@ def _repoint_annotations(resolver: _Resolver) -> None:
     Args:
         resolver: The resolver for this remove_pages() call.
     """
-    for page in resolver.pdf.pages:
-        annots = page.obj.get(Name.Annots)
-        if not isinstance(annots, Array):
-            continue
+    for page, annots in _page_annotations(resolver.pdf):
         for annot in annots.as_list():
             if isinstance(annot, Dictionary) and resolver.is_removed(annot.get(Name.P)):
-                annot.P = page.obj
+                annot.P = page
 
 
 def _prune_destinations(resolver: _Resolver) -> None:
