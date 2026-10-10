@@ -177,6 +177,21 @@ class RemovePagesTest(unittest.TestCase):
 
             self.assertEqual([annot.objgen for annot in kept], annotation_ids(pdf, 0))
 
+    def test_repoints_an_annotation_shared_with_a_remaining_page(self) -> None:
+        """An annotation a removed page shared names the first remaining page holding it as its /P."""
+        with make_pdf([A4, A4, A4]) as pdf:
+            annot = pdf.make_indirect(
+                Dictionary(Type=Name.Annot, Subtype=Name.Text, Rect=Array([0, 0, 10, 10]), P=pdf.pages[0].obj)
+            )
+            set_annotations(pdf, 0, [annot])
+            pdf.pages[1].Annots = pdf.pages[0].Annots
+            set_annotations(pdf, 2, [annot])
+
+            core.remove_pages(pdf, {1})
+
+            self.assertEqual(pdf.pages[0].objgen, annot.P.objgen)
+            self.assertEqual(2, saved_page_objects(pdf))
+
     def test_prunes_links_in_a_shared_annotations_array(self) -> None:
         """An /Annots array shared between remaining pages is pruned once, correctly."""
         with make_pdf([A4, A4, PLATE]) as pdf:
