@@ -999,11 +999,15 @@ def _rename_states(widget: Dictionary, old: str, new: str) -> None:
     """
     appearances = widget.get(Name.AP)
     if isinstance(appearances, Dictionary):
+        # Rebuilt for this widget rather than changed in place: appearance
+        # dictionaries may be shared, with widgets of other fields too,
+        # whose states have to stay as they are.
+        renamed = Dictionary(dict(appearances.items()))
         for kind in (Name.N, Name.R, Name.D):
             states = appearances.get(kind)
-            if isinstance(states, Dictionary) and old in states:
-                states[new] = states[old]
-                del states[old]
+            if isinstance(states, Dictionary):
+                renamed[kind] = Dictionary({new if key == old else key: value for key, value in states.items()})
+        widget.AP = renamed
     if str(widget.get(Name.AS)) == old:
         widget.AS = Name(new)
 

@@ -6,7 +6,7 @@ import unittest
 from collections.abc import Sequence
 
 import pikepdf
-from pikepdf import Array, Dictionary, Name, NameTree, OutlineItem, Stream, String
+from pikepdf import Array, Dictionary, Name, NameTree, Object, OutlineItem, Stream, String
 
 from pagewielder import core
 from tests.helpers import (
@@ -643,6 +643,32 @@ class FormTest(unittest.TestCase):
             self.assertEqual({"/1", "/Off"}, set(widgets[2].AP.R.keys()))
             self.assertEqual(Name("/1"), widgets[2].AS)
             self.assertEqual(Name("/1"), radio.V)
+
+    def test_renumbers_without_touching_appearances_other_fields_share(self) -> None:
+        """Renumbering one field leaves appearance dictionaries it shares with another field as they were."""
+        with make_pdf([A4, A4, A4]) as pdf:
+            on = Stream(pdf, b"")
+            shared = [pdf.make_indirect(Dictionary(N=Dictionary({f"/{index}": on, "/Off": on}))) for index in range(3)]
+            groups: list[tuple[Object, list[Object]]] = []
+            for name in ("a", "b"):
+                widgets = [widget(pdf, page) for page in range(3)]
+                for button, appearances in zip(widgets, shared):
+                    button.AP = appearances
+                widgets[2].AS = Name("/2")
+                radio = field(pdf, name, widgets)
+                radio.FT = Name.Btn
+                radio.Opt = Array([String("x"), String("y"), String("z")])
+                radio.V = Name("/2")
+                groups.append((radio, widgets))
+            set_form(pdf, [radio for radio, _ in groups])
+
+            core.remove_pages(pdf, {1})
+
+            self.assertEqual({"/2", "/Off"}, set(shared[2].N.keys()))
+            for radio, widgets in groups:
+                self.assertEqual({"/1", "/Off"}, set(widgets[2].AP.N.keys()))
+                self.assertEqual(Name("/1"), widgets[2].AS)
+                self.assertEqual(Name("/1"), radio.V)
 
     def test_leaves_buttons_in_unison_as_they_are(self) -> None:
         """Widgets sharing a positional state are not renumbered, and /Opt keeps every entry."""
