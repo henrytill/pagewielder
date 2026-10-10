@@ -127,7 +127,7 @@ Tests use Python's unittest framework, discovered from `tests/`.
 
 - `tests/test_core.py`: `map_dimensions_to_pages` plus the bulk of the suite on `remove_pages` — outline pruning, link annotations, named destinations, `/GoTo` actions, `/PageLabels` remapping, the structure tree (`StructTreeTest`), the interactive form (`FormTest`), and the malformed-input cases.
 - `tests/test_cli.py`: `select_dimensions`, `parse_page_range` and an end-to-end `excerpt` run.
-- `tests/helpers.py`: builders and readers shared by both — `make_pdf()`, `outline_titles()`, `link()`, `text_annotation()`, `widget()`, `field()`, `set_form()`, `field_ids()`, `set_annotations()`, `annotation_ids()`, `count_page_objects()`, `saved_page_objects()`, `set_named_destinations()`, `named_destinations()`, `struct_elem()`, `set_struct_tree()`, `parent_tree_keys()`, `struct_kid_ids()`, `set_page_labels()`, `page_label_ranges()`, and the `A4` / `PLATE` page sizes. Prefer extending these over hand-rolling PDF fixtures.
+- `tests/helpers.py`: builders and readers shared by both — `make_pdf()`, `outline_titles()`, `link()`, `text_annotation()`, `widget()`, `field()`, `set_form()`, `set_annotations()`, `annotation_ids()`, `count_page_objects()`, `saved_page_objects()`, `set_named_destinations()`, `named_destinations()`, `struct_elem()`, `set_struct_tree()`, `parent_tree_keys()`, `kid_ids()`, `set_page_labels()`, `page_label_ranges()`, and the `A4` / `PLATE` page sizes. Prefer extending these over hand-rolling PDF fixtures.
 
 Run specific test:
 ```bash

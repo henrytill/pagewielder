@@ -14,7 +14,7 @@ from tests.helpers import (
     PLATE,
     annotation_ids,
     field,
-    field_ids,
+    kid_ids,
     link,
     make_pdf,
     named_destinations,
@@ -28,7 +28,6 @@ from tests.helpers import (
     set_page_labels,
     set_struct_tree,
     struct_elem,
-    struct_kid_ids,
     text_annotation,
     widget,
 )
@@ -371,7 +370,7 @@ class StructTreeTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([], kid_ids(pdf.Root.StructTreeRoot, Name.K))
             self.assertEqual([], parent_tree_keys(pdf))
             self.assertEqual(1, saved_page_objects(pdf))
 
@@ -387,7 +386,7 @@ class StructTreeTest(unittest.TestCase):
             core.remove_pages(pdf, {2})
 
             self.assertEqual([], parent_tree_keys(pdf))
-            self.assertEqual([elem.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([elem.objgen], kid_ids(pdf.Root.StructTreeRoot, Name.K))
             self.assertEqual(1, saved_page_objects(pdf))
 
     def test_drops_the_reference_to_an_annotation_placed_only_by_its_page(self) -> None:
@@ -401,7 +400,7 @@ class StructTreeTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([], kid_ids(pdf.Root.StructTreeRoot, Name.K))
             self.assertEqual([], parent_tree_keys(pdf))
 
     def test_drops_the_reference_to_an_unplaced_annotation_naming_a_removed_page(self) -> None:
@@ -413,7 +412,7 @@ class StructTreeTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([], kid_ids(pdf.Root.StructTreeRoot, Name.K))
 
     def test_keeps_an_annotation_shared_with_a_remaining_page(self) -> None:
         """An annotation in an /Annots array a remaining page shares stays in the tree."""
@@ -428,7 +427,7 @@ class StructTreeTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([elem.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([elem.objgen], kid_ids(pdf.Root.StructTreeRoot, Name.K))
             self.assertEqual([0], parent_tree_keys(pdf))
             self.assertFalse(Name.Pg in elem.K)
 
@@ -444,7 +443,7 @@ class StructTreeTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([first.objgen], struct_kid_ids(document))
+            self.assertEqual([first.objgen], kid_ids(document, Name.K))
             self.assertEqual([0], parent_tree_keys(pdf))
             self.assertEqual(1, saved_page_objects(pdf))
 
@@ -457,7 +456,7 @@ class StructTreeTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([elem.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([elem.objgen], kid_ids(pdf.Root.StructTreeRoot, Name.K))
             self.assertEqual([Name.MCR], [kid.Type for kid in elem.K.as_list()])
             self.assertFalse(Name.Pg in elem)
             self.assertEqual(1, saved_page_objects(pdf))
@@ -476,7 +475,7 @@ class StructTreeTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([], kid_ids(pdf.Root.StructTreeRoot, Name.K))
             self.assertEqual([], parent_tree_keys(pdf))
             self.assertEqual(1, saved_page_objects(pdf))
 
@@ -493,7 +492,7 @@ class StructTreeTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([kept.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([kept.objgen], kid_ids(pdf.Root.StructTreeRoot, Name.K))
 
     def test_keeps_an_element_that_had_no_kids(self) -> None:
         """An element with an empty /K was not emptied by the removal, and stays."""
@@ -504,7 +503,7 @@ class StructTreeTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([first.objgen, figure.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([first.objgen, figure.objgen], kid_ids(pdf.Root.StructTreeRoot, Name.K))
 
     def test_keeps_an_element_with_no_kids_off_a_removed_page(self) -> None:
         """An element with no kids keeps no /Pg naming a removed page."""
@@ -514,7 +513,7 @@ class StructTreeTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([figure.objgen], struct_kid_ids(pdf.Root.StructTreeRoot))
+            self.assertEqual([figure.objgen], kid_ids(pdf.Root.StructTreeRoot, Name.K))
             self.assertFalse(Name.Pg in figure)
             self.assertEqual(1, saved_page_objects(pdf))
 
@@ -543,7 +542,7 @@ class StructTreeTest(unittest.TestCase):
             core.remove_pages(pdf, {2})
 
             self.assertEqual(1, len(pdf.pages))
-            self.assertEqual([first.objgen], struct_kid_ids(root))
+            self.assertEqual([first.objgen], kid_ids(root, Name.K))
 
     def test_tolerates_a_null_in_the_id_tree(self) -> None:
         """A null /IDTree value does not stop the removal."""
@@ -585,7 +584,7 @@ class FormTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([], field_ids(form, Name.Fields))
+            self.assertEqual([], kid_ids(form, Name.Fields))
             self.assertTrue(Name.AcroForm in pdf.Root)
             self.assertEqual(1, saved_page_objects(pdf))
 
@@ -598,8 +597,8 @@ class FormTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([node.objgen], field_ids(form, Name.Fields))
-            self.assertEqual([kept.objgen], field_ids(node))
+            self.assertEqual([node.objgen], kid_ids(form, Name.Fields))
+            self.assertEqual([kept.objgen], kid_ids(node, Name.Kids))
             self.assertEqual(1, saved_page_objects(pdf))
 
     def test_drops_emptied_fields_up_the_tree_and_from_the_calculation_order(self) -> None:
@@ -613,9 +612,9 @@ class FormTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([parent.objgen], field_ids(form, Name.Fields))
-            self.assertEqual([kept.objgen], field_ids(parent))
-            self.assertEqual([kept.objgen], field_ids(form, Name.CO))
+            self.assertEqual([parent.objgen], kid_ids(form, Name.Fields))
+            self.assertEqual([kept.objgen], kid_ids(parent, Name.Kids))
+            self.assertEqual([kept.objgen], kid_ids(form, Name.CO))
             self.assertEqual(1, saved_page_objects(pdf))
 
     def test_drops_a_widget_placed_only_by_its_page(self) -> None:
@@ -628,7 +627,7 @@ class FormTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertNotIn(gone.objgen, field_ids(node))
+            self.assertNotIn(gone.objgen, kid_ids(node, Name.Kids))
             self.assertEqual(1, saved_page_objects(pdf))
 
     def test_prunes_a_field_tree_deeper_than_the_recursion_limit(self) -> None:
@@ -641,7 +640,7 @@ class FormTest(unittest.TestCase):
 
             core.remove_pages(pdf, {2})
 
-            self.assertEqual([], field_ids(form, Name.Fields))
+            self.assertEqual([], kid_ids(form, Name.Fields))
 
 
 if __name__ == "__main__":

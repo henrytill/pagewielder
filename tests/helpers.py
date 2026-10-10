@@ -78,11 +78,6 @@ def set_form(pdf: Pdf, fields: Sequence[Object], order: Sequence[Object] | None 
     return form
 
 
-def field_ids(holder: Object, key: Name = Name.Kids) -> list[tuple[int, int]]:
-    """List the object identifiers of the kids of a field, or of /Fields or /CO with key."""
-    return [kid.objgen for kid in holder[key].as_list()]
-
-
 def set_annotations(pdf: Pdf, index: int, annots: Sequence[Object]) -> None:
     """Give the page at a 0-based index an indirect /Annots array."""
     pdf.pages[index].Annots = pdf.make_indirect(Array(annots))
@@ -158,9 +153,9 @@ def parent_tree_keys(pdf: Pdf) -> list[int]:
     return list(NumberTree(pdf.Root.StructTreeRoot.ParentTree).keys())
 
 
-def struct_kid_ids(holder: Object) -> list[tuple[int, int]]:
-    """List the object identifiers of the elements under a structure tree root or element."""
-    return [kid.objgen for kid in holder.K.as_list()]
+def kid_ids(holder: Object, key: Name) -> list[tuple[int, int]]:
+    """List the object identifiers of the indirect objects in an array, such as a node's /K or /Kids."""
+    return [kid.objgen for kid in holder[key].as_list()]
 
 
 def set_page_labels(pdf: Pdf, nums: Sequence[int | Dictionary]) -> None:
