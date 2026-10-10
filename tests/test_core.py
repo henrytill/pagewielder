@@ -644,8 +644,8 @@ class FormTest(unittest.TestCase):
             self.assertEqual(Name("/1"), widgets[2].AS)
             self.assertEqual(Name("/1"), radio.V)
 
-    def test_keeps_buttons_in_unison_together(self) -> None:
-        """Widgets sharing a positional state still share one after renumbering, and /V keeps its option."""
+    def test_leaves_buttons_in_unison_as_they_are(self) -> None:
+        """Widgets sharing a positional state are not renumbered, and /Opt keeps every entry."""
         with make_pdf([A4, A4, A4]) as pdf:
             widgets = [widget(pdf, page) for page in range(3)]
             for button, state in zip(widgets, ["/0", "/1", "/0"]):
@@ -659,13 +659,13 @@ class FormTest(unittest.TestCase):
 
             core.remove_pages(pdf, {1})
 
-            self.assertEqual(["B", "A"], [str(option) for option in radio.Opt.as_list()])
-            self.assertEqual({"/0", "/Off"}, set(widgets[1].AP.N.keys()))
-            self.assertEqual({"/1", "/Off"}, set(widgets[2].AP.N.keys()))
-            self.assertEqual(Name("/1"), radio.V)
+            self.assertEqual(["A", "B", "A"], [str(option) for option in radio.Opt.as_list()])
+            self.assertEqual({"/1", "/Off"}, set(widgets[1].AP.N.keys()))
+            self.assertEqual({"/0", "/Off"}, set(widgets[2].AP.N.keys()))
+            self.assertEqual(Name("/0"), radio.V)
 
-    def test_renames_a_shared_appearance_dictionary_once(self) -> None:
-        """Widgets sharing one /AP have it renamed once, so it stays in step with their /AS."""
+    def test_leaves_widgets_sharing_appearances_as_they_are(self) -> None:
+        """Widgets sharing one /AP are not renumbered, and /Opt keeps every entry."""
         with make_pdf([A4, A4, A4, A4]) as pdf:
             widgets = [widget(pdf, page) for page in range(4)]
             on = Stream(pdf, b"")
@@ -683,27 +683,28 @@ class FormTest(unittest.TestCase):
 
             core.remove_pages(pdf, {1})
 
-            self.assertEqual({"/1", "/Off"}, set(shared.N.keys()))
-            self.assertEqual([Name("/1"), Name("/1")], [button.AS for button in widgets[2:]])
-            self.assertEqual(Name("/1"), radio.V)
+            self.assertEqual(4, len(radio.Opt))
+            self.assertEqual({"/2", "/Off"}, set(shared.N.keys()))
+            self.assertEqual([Name("/2"), Name("/2")], [button.AS for button in widgets[2:]])
+            self.assertEqual(Name("/2"), radio.V)
 
     def test_trims_button_options_for_direct_widgets(self) -> None:
         """Widgets written directly into /Kids are matched to /Opt by position, not by identifier."""
         with make_pdf([A4, A4]) as pdf:
             on = Stream(pdf, b"")
-            gone = Dictionary(Subtype=Name.Widget, P=pdf.pages[1].obj, AP=Dictionary(N=Dictionary({"/0": on})))
-            loose = Dictionary(Subtype=Name.Widget, AP=Dictionary(N=Dictionary({"/1": on})))
+            gone = Dictionary(Subtype=Name.Widget, P=pdf.pages[1].obj, AP=Dictionary(N=Dictionary(a=on)))
+            loose = Dictionary(Subtype=Name.Widget, AP=Dictionary(N=Dictionary(b=on)))
             placed = widget(pdf, 0)
-            placed.AP = Dictionary(N=Dictionary({"/2": on}))
+            placed.AP = Dictionary(N=Dictionary(c=on))
             radio = pdf.make_indirect(Dictionary(T=String("radio"), FT=Name.Btn, Kids=Array([gone, loose, placed])))
             radio.Opt = Array([String("A"), String("B"), String("C")])
-            radio.V = Name("/2")
+            radio.V = Name.c
             set_form(pdf, [radio])
 
             core.remove_pages(pdf, {2})
 
             self.assertEqual(["B", "C"], [str(option) for option in radio.Opt.as_list()])
-            self.assertEqual(Name("/1"), radio.V)
+            self.assertEqual(Name.c, radio.V)
 
     def test_turns_off_a_value_only_a_dropped_button_showed(self) -> None:
         """A button field whose value only a dropped widget turned on is left off."""

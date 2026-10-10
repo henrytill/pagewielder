@@ -989,34 +989,57 @@ def _on_states(widget: Object | int) -> set[str]:
     return set(normal.keys()) - {"/Off"} if isinstance(normal, Dictionary) else set()
 
 
-def _rename_states(widget: Object | int, renames: dict[str, str], done: set[_ObjGen]) -> None:
-    """Rename a button widget's appearance states and its current state.
+def _rename_states(widget: Dictionary, old: str, new: str) -> None:
+    """Rename one of a button widget's states, in its appearances and its current state.
 
     Args:
         widget: A widget annotation.
-        renames: New names by old, all applied at once.
-        done: Identifiers of the indirect widgets and ``/AP`` dictionaries
-            renamed already, which this adds to.  Renames can chain, ``/2`` to
-            ``/1`` and ``/1`` to ``/0``, so a widget listed twice, or an
-            ``/AP`` shared by widgets in unison, is renamed only once.
+        old: The state's name.
+        new: Its new name.
     """
-    ident = _indirect_id(widget)
-    if not isinstance(widget, Dictionary) or ident in done:
-        return
-    if ident is not None:
-        done.add(ident)
     appearances = widget.get(Name.AP)
-    shared = _indirect_id(appearances)
-    if isinstance(appearances, Dictionary) and shared not in done:
-        if shared is not None:
-            done.add(shared)
+    if isinstance(appearances, Dictionary):
         for kind in (Name.N, Name.R, Name.D):
             states = appearances.get(kind)
-            if isinstance(states, Dictionary):
-                appearances[kind] = Dictionary({renames.get(key, key): value for key, value in states.items()})
-    state = widget.get(Name.AS)
-    if state is not None and str(state) in renames:
-        widget.AS = Name(renames[str(state)])
+            if isinstance(states, Dictionary) and old in states:
+                states[new] = states[old]
+                del states[old]
+    if str(widget.get(Name.AS)) == old:
+        widget.AS = Name(new)
+
+
+def _positional_renames(frame: _KidsFrame) -> dict[str, str] | None:
+    """Work out how a button field's states named by position are renumbered.
+
+    Renumbering is done only in the simple case, where each kept widget is
+    indirect, kept once, has an ``/AP`` of its own, and is turned on by the
+    one state named for its own position.  Widgets in unison sharing a
+    state, shared appearances and inline widgets each bend that, and
+    renaming around them has no end of corner cases, so a field with any
+    is left as it is.
+
+    Args:
+        frame: A button field's frame, with its kids all decided.
+
+    Returns:
+        New state names by old, empty if no state is named by position, or
+        None if the field is not the simple case.
+    """
+    states = [_on_states(kid) for kid in frame.items]
+    if not any(state[1:].isdigit() for names in states for state in names):
+        return {}
+    widgets = [_indirect_id(kid) for kid in frame.kept]
+    shared = [_indirect_id(kid.get(Name.AP)) for kid in frame.kept if isinstance(kid, Dictionary)]
+    appearances = [ident for ident in shared if ident is not None]
+    simple = (
+        None not in widgets
+        and len(set(widgets)) == len(widgets)
+        and len(set(appearances)) == len(appearances)
+        and all(states[old] == {f"/{old}"} for old in frame.positions)
+    )
+    if not simple:
+        return None
+    return {f"/{old}": f"/{new}" for new, old in enumerate(frame.positions) if old != new}
 
 
 def _set_button_states(frame: _KidsFrame) -> None:
@@ -1026,11 +1049,11 @@ def _set_button_states(frame: _KidsFrame) -> None:
     kid, matched by position, so pruning ``/Kids`` alone would shift every
     later widget onto another's value.  ``/Opt`` loses the dropped widgets'
     entries, and on states named by position, ``/0``, ``/1`` and so on, are
-    renumbered to match, in the kept widgets and in the field's ``/V`` and
-    ``/DV``.  A value that only a dropped widget turned on becomes
-    ``/Off``, since no widget left can show it.  ``/Opt`` of any other
-    length, or of a choice field, where it lists the options, is left as
-    it is.
+    renumbered to match where ``_positional_renames()`` can do so simply;
+    otherwise ``/Opt`` and the states are left as they are.  A value that
+    only a dropped widget turned on becomes ``/Off`` either way, since no
+    widget left can show it.  ``/Opt`` of any other length, or of a choice
+    field, where it lists the options, is left as it is.
 
     Args:
         frame: A field's frame, with its kids all decided.
@@ -1038,28 +1061,23 @@ def _set_button_states(frame: _KidsFrame) -> None:
     field, items = frame.holder, frame.items
     if len(frame.kept) == len(items) or _field_type(field) != Name.Btn:
         return
-    positions = frame.positions
 
     renames: dict[str, str] = {}
     options = field.get(Name.Opt)
     if isinstance(options, Array) and len(options) == len(items):
-        field.Opt = Array([options[index] for index in positions])
-        # A positional state is renamed as a whole, to the new position of
-        # the first kept widget showing it, so widgets that share one, as
-        # radio buttons in unison with the same export value do, still do.
-        for new, kid in enumerate(frame.kept):
-            for state in sorted(_on_states(kid)):
-                if state[1:].isdigit():
-                    renames.setdefault(state, f"/{new}")
-        renames = {old: new for old, new in renames.items() if old != new}
+        found = _positional_renames(frame)
+        if found is not None:
+            renames = found
+            field.Opt = Array([options[index] for index in frame.positions])
+            for widget in frame.kept:
+                if isinstance(widget, Dictionary):
+                    for old, new in renames.items():
+                        _rename_states(widget, old, new)
 
-    kept_positions = set(positions)
+    kept_positions = set(frame.positions)
     dropped = [kid for index, kid in enumerate(items) if index not in kept_positions]
     kept_states = set[str]().union(*map(_on_states, frame.kept))
     dropped_states = set[str]().union(*map(_on_states, dropped))
-    done: set[_ObjGen] = set()
-    for widget in frame.kept:
-        _rename_states(widget, renames, done)
     for key in (Name.V, Name.DV):
         value = field.get(key)
         if value is None:
