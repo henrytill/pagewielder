@@ -4,7 +4,7 @@ import io
 from collections.abc import Mapping, Sequence
 
 import pikepdf
-from pikepdf import Array, Dictionary, Name, NameTree, NumberTree, Object, Pdf
+from pikepdf import Array, Dictionary, Name, NameTree, NumberTree, Object, Pdf, String
 
 A4 = (595.0, 842.0)
 PLATE = (1000.0, 700.0)
@@ -40,6 +40,47 @@ def text_annotation(pdf: Pdf, page: Object | None = None) -> Object:
     if page is not None:
         annot.P = page
     return pdf.make_indirect(annot)
+
+
+def widget(pdf: Pdf, page: int, name: str | None = None) -> Object:
+    """Build an indirect widget on the page at a 0-based index, adding it to the page's /Annots.
+
+    Given a name, the widget is a text field and widget in one.
+    """
+    annot = pdf.make_indirect(
+        Dictionary(Type=Name.Annot, Subtype=Name.Widget, Rect=Array([0, 0, 10, 10]), P=pdf.pages[page].obj)
+    )
+    if name is not None:
+        annot.T = String(name)
+        annot.FT = Name.Tx
+    annots = pdf.pages[page].obj.get(Name.Annots)
+    if isinstance(annots, Array):
+        annots.append(annot)
+    else:
+        pdf.pages[page].Annots = pdf.make_indirect(Array([annot]))
+    return annot
+
+
+def field(pdf: Pdf, name: str, kids: Sequence[Object]) -> Object:
+    """Build an indirect form field with the given kids, setting each kid's /Parent."""
+    node = pdf.make_indirect(Dictionary(T=String(name), Kids=Array(kids)))
+    for kid in kids:
+        kid.Parent = node
+    return node
+
+
+def set_form(pdf: Pdf, fields: Sequence[Object], order: Sequence[Object] | None = None) -> Dictionary:
+    """Give a PDF an /AcroForm with the given top-level fields and, if given, a calculation order."""
+    form = Dictionary(Fields=Array(fields))
+    if order is not None:
+        form.CO = Array(order)
+    pdf.Root.AcroForm = form
+    return form
+
+
+def field_ids(holder: Object, key: Name = Name.Kids) -> list[tuple[int, int]]:
+    """List the object identifiers of the kids of a field, or of /Fields or /CO with key."""
+    return [kid.objgen for kid in holder[key].as_list()]
 
 
 def set_annotations(pdf: Pdf, index: int, annots: Sequence[Object]) -> None:

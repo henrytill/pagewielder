@@ -13,6 +13,8 @@ from tests.helpers import (
     A4,
     PLATE,
     annotation_ids,
+    field,
+    field_ids,
     link,
     make_pdf,
     named_destinations,
@@ -21,12 +23,14 @@ from tests.helpers import (
     parent_tree_keys,
     saved_page_objects,
     set_annotations,
+    set_form,
     set_named_destinations,
     set_page_labels,
     set_struct_tree,
     struct_elem,
     struct_kid_ids,
     text_annotation,
+    widget,
 )
 
 
@@ -557,6 +561,76 @@ class StructTreeTest(unittest.TestCase):
 
             self.assertEqual([0], parent_tree_keys(pdf))
             self.assertEqual(1, saved_page_objects(pdf))
+
+
+class FormTest(unittest.TestCase):
+    """Tests for how remove_pages prunes the interactive form."""
+
+    def test_drops_a_field_whose_widget_was_on_a_removed_page(self) -> None:
+        """A field and widget in one on a removed page leaves /Fields; the emptied form stays."""
+        with make_pdf([A4, A4]) as pdf:
+            merged = widget(pdf, 1, name="gone")
+            form = set_form(pdf, [merged])
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([], field_ids(form, Name.Fields))
+            self.assertTrue(Name.AcroForm in pdf.Root)
+            self.assertEqual(1, saved_page_objects(pdf))
+
+    def test_keeps_a_field_with_a_widget_on_a_remaining_page(self) -> None:
+        """A field loses its widget on a removed page and keeps the one on a remaining page."""
+        with make_pdf([A4, A4]) as pdf:
+            kept, gone = widget(pdf, 0), widget(pdf, 1)
+            node = field(pdf, "f", [kept, gone])
+            form = set_form(pdf, [node])
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([node.objgen], field_ids(form, Name.Fields))
+            self.assertEqual([kept.objgen], field_ids(node))
+            self.assertEqual(1, saved_page_objects(pdf))
+
+    def test_drops_emptied_fields_up_the_tree_and_from_the_calculation_order(self) -> None:
+        """Fields left with no kids go, recursively, and leave /CO."""
+        with make_pdf([A4, A4]) as pdf:
+            kept = field(pdf, "kept", [widget(pdf, 0)])
+            gone = field(pdf, "gone", [widget(pdf, 1)])
+            parent = field(pdf, "parent", [kept, gone])
+            emptied = field(pdf, "emptied", [field(pdf, "inner", [widget(pdf, 1)])])
+            form = set_form(pdf, [parent, emptied], order=[kept, gone])
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([parent.objgen], field_ids(form, Name.Fields))
+            self.assertEqual([kept.objgen], field_ids(parent))
+            self.assertEqual([kept.objgen], field_ids(form, Name.CO))
+            self.assertEqual(1, saved_page_objects(pdf))
+
+    def test_drops_a_widget_placed_only_by_its_page(self) -> None:
+        """A widget no /Annots holds goes when its /P names a removed page."""
+        with make_pdf([A4, A4]) as pdf:
+            gone = widget(pdf, 1)
+            del pdf.pages[1].Annots
+            node = field(pdf, "f", [widget(pdf, 0), gone])
+            set_form(pdf, [node])
+
+            core.remove_pages(pdf, {2})
+
+            self.assertNotIn(gone.objgen, field_ids(node))
+            self.assertEqual(1, saved_page_objects(pdf))
+
+    def test_prunes_a_field_tree_deeper_than_the_recursion_limit(self) -> None:
+        """A field tree nested deeper than Python's stack allows is pruned, not given up on."""
+        with make_pdf([A4, A4]) as pdf:
+            node = widget(pdf, 1)
+            for depth in range(sys.getrecursionlimit() * 2):
+                node = field(pdf, str(depth), [node])
+            form = set_form(pdf, [node])
+
+            core.remove_pages(pdf, {2})
+
+            self.assertEqual([], field_ids(form, Name.Fields))
 
 
 if __name__ == "__main__":
