@@ -26,6 +26,7 @@ from tests.helpers import (
     set_struct_tree,
     struct_elem,
     struct_kid_ids,
+    text_annotation,
 )
 
 
@@ -169,7 +170,7 @@ class RemovePagesTest(unittest.TestCase):
                 link(pdf, dest=Array([pdf.pages[1].obj, Name.Fit])),
                 link(pdf, action=Dictionary(S=Name.URI, URI=String("https://example.com"))),
                 link(pdf, action=Dictionary(S=Name.GoToR, F=String("other.pdf"), D=Array([1, Name.Fit]))),
-                pdf.make_indirect(Dictionary(Type=Name.Annot, Subtype=Name.Text, Rect=Array([0, 0, 10, 10]))),
+                text_annotation(pdf),
             ]
             set_annotations(pdf, 0, [*kept, link(pdf, dest=Array([pdf.pages[2].obj, Name.Fit]))])
 
@@ -180,9 +181,7 @@ class RemovePagesTest(unittest.TestCase):
     def test_repoints_an_annotation_shared_with_a_remaining_page(self) -> None:
         """An annotation a removed page shared names the first remaining page holding it as its /P."""
         with make_pdf([A4, A4, A4]) as pdf:
-            annot = pdf.make_indirect(
-                Dictionary(Type=Name.Annot, Subtype=Name.Text, Rect=Array([0, 0, 10, 10]), P=pdf.pages[0].obj)
-            )
+            annot = text_annotation(pdf, page=pdf.pages[0].obj)
             set_annotations(pdf, 0, [annot])
             pdf.pages[1].Annots = pdf.pages[0].Annots
             set_annotations(pdf, 2, [annot])
@@ -390,7 +389,7 @@ class StructTreeTest(unittest.TestCase):
     def test_drops_the_reference_to_an_annotation_placed_only_by_its_page(self) -> None:
         """An annotation on a removed page leaves the tree though no /P or /Pg names the page."""
         with make_pdf([A4, A4]) as pdf:
-            annot = pdf.make_indirect(Dictionary(Type=Name.Annot, Subtype=Name.Text, Rect=Array([0, 0, 10, 10])))
+            annot = text_annotation(pdf)
             annot.StructParent = 0
             set_annotations(pdf, 1, [annot])
             elem = struct_elem(pdf, Dictionary(Type=Name.OBJR, Obj=annot))
@@ -404,9 +403,7 @@ class StructTreeTest(unittest.TestCase):
     def test_keeps_an_annotation_shared_with_a_remaining_page(self) -> None:
         """An annotation in an /Annots array a remaining page shares stays in the tree."""
         with make_pdf([A4, A4]) as pdf:
-            annot = pdf.make_indirect(
-                Dictionary(Type=Name.Annot, Subtype=Name.Text, Rect=Array([0, 0, 10, 10]), P=pdf.pages[1].obj)
-            )
+            annot = text_annotation(pdf, page=pdf.pages[1].obj)
             annot.StructParent = 0
             set_annotations(pdf, 1, [annot])
             pdf.pages[0].Annots = pdf.pages[1].Annots
