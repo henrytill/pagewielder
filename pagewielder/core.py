@@ -488,6 +488,27 @@ def _prune_links(resolver: _Resolver) -> None:
             del annots[index]
 
 
+def _repoint_annotations(resolver: _Resolver) -> None:
+    """Point annotations on the remaining pages away from removed pages.
+
+    An annotation a removed page shared with a remaining one, by sharing
+    the annotation or its whole ``/Annots`` array, may name the removed page
+    as its ``/P``, which would keep that page in the saved file.  Its
+    ``/P`` becomes the first remaining page holding it, which is as much
+    its page as any other that shares it.
+
+    Args:
+        resolver: The resolver for this remove_pages() call.
+    """
+    for page in resolver.pdf.pages:
+        annots = page.obj.get(Name.Annots)
+        if not isinstance(annots, Array):
+            continue
+        for annot in annots.as_list():
+            if isinstance(annot, Dictionary) and resolver.is_removed(annot.get(Name.P)):
+                annot.P = page.obj
+
+
 def _prune_destinations(resolver: _Resolver) -> None:
     """Drop document-level destinations that point at removed pages.
 
@@ -785,6 +806,7 @@ def remove_pages(pdf: Pdf, pages: Pages) -> None:
             outline.root[:] = _prune_outline_items(resolver, outline.root)
 
     _prune_links(resolver)
+    _repoint_annotations(resolver)
     _prune_destinations(resolver)
     _prune_struct_tree(resolver)
 
