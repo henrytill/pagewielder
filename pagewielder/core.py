@@ -493,7 +493,9 @@ def _prune_links(resolver: _Resolver) -> None:
         resolver: The resolver for this remove_pages() call.
     """
     # A page sharing an /Annots array already pruned for another finds
-    # nothing left to delete.
+    # nothing left to delete.  Each link is decided again rather than
+    # looked up in resolver.stale_links: deciding is a few dict lookups, the
+    # answer cannot differ, and a direct link has no identifier to look up.
     for _, annots in _page_annotations(resolver.pdf):
         stale = [index for index, annot in enumerate(annots.as_list()) if resolver.is_stale_link(annot)]
         for index in reversed(stale):
