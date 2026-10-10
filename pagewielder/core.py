@@ -782,6 +782,156 @@ def _prune_struct_tree(resolver: _Resolver) -> None:
         _delete_from_tree(root, Name.IDTree, ids, stale_ids)
 
 
+class _FieldFrame(typing.NamedTuple):
+    """A field, or the form itself, whose kids are being pruned.
+
+    Attributes:
+        holder: The field, or the ``/AcroForm`` dictionary.
+        key: ``/Kids`` for a field, ``/Fields`` for the form.
+        items: Holder's kids, as they were.
+        pending: The kids still to be decided.
+        kept: The kids decided so far to keep.
+    """
+
+    holder: Dictionary
+    key: Name
+    items: list[Object]
+    pending: typing.Iterator[Object]
+    kept: list[Object]
+
+
+def _is_removed_widget(resolver: _Resolver, obj: Object) -> bool:
+    """Say whether obj is a widget annotation that went with the removed pages.
+
+    Args:
+        resolver: The resolver for this remove_pages() call.
+        obj: A field, a widget, or a field and widget in one.
+
+    Returns:
+        True if obj was on a removed page and is on no remaining one.
+    """
+    if not isinstance(obj, Dictionary):
+        return False
+    if resolver.is_removed_annotation(obj):
+        return True
+    # A widget no page's /Annots holds has only its /P to go by.
+    return (
+        obj.get(Name.Subtype) == Name.Widget
+        and not resolver.is_placed_annotation(obj)
+        and resolver.is_removed(obj.get(Name.P))
+    )
+
+
+def _enter_field(holder: Dictionary, key: Name) -> _FieldFrame | None:
+    """Start pruning holder's kids, if it has any.
+
+    Args:
+        holder: A field, or the ``/AcroForm`` dictionary.
+        key: ``/Kids`` for a field, ``/Fields`` for the form.
+
+    Returns:
+        A frame for holder, or None if it has no kids, as a terminal field
+        does: one that had none lost none to the removed pages.
+    """
+    kids = holder.get(key)
+    if not isinstance(kids, Array) or len(kids) == 0:
+        return None
+    items = list(kids.as_list())
+    return _FieldFrame(holder, key, items, iter(items), [])
+
+
+class _FormPruner:
+    """Walks a form's field tree, dropping the fields whose widgets all went."""
+
+    def __init__(self, resolver: _Resolver) -> None:
+        """Set up a pruner.
+
+        Args:
+            resolver: The resolver for this remove_pages() call.
+        """
+        self._resolver = resolver
+        # Object identifiers of the indirect fields and widgets dropped.
+        self.dropped: set[_ObjGen] = set()
+        # A field reached again, by a malformed tree sharing or looping back
+        # to it, is not walked twice.
+        self._entered: set[_ObjGen] = set()
+
+    def prune(self, form: Dictionary) -> None:
+        """Prune the field tree under form.  A form left with no fields stays.
+
+        The walk keeps its own stack, as the structure tree's does, so that
+        a field tree too deep for Python's stack still has its pages removed.
+
+        Args:
+            form: The ``/AcroForm`` dictionary.
+        """
+        start = _enter_field(form, Name.Fields)
+        stack = [start] if start is not None else []
+        while stack:
+            frame = stack[-1]
+            for kid in frame.pending:
+                child = self._enter(kid)
+                if child is not None:
+                    stack.append(child)
+                    break
+                if self._keep(kid):
+                    frame.kept.append(kid)
+            else:
+                stack.pop()
+                if len(frame.kept) < len(frame.items):
+                    frame.holder[frame.key] = Array(frame.kept)
+                if stack and frame.kept:
+                    stack[-1].kept.append(frame.holder)
+                elif stack:
+                    self._drop(frame.holder)
+
+    def _enter(self, kid: Object) -> _FieldFrame | None:
+        if not isinstance(kid, Dictionary) or _is_removed_widget(self._resolver, kid):
+            return None
+        ident = _indirect_id(kid)
+        if ident is not None:
+            if ident in self._entered:
+                return None
+            self._entered.add(ident)
+        return _enter_field(kid, Name.Kids)
+
+    def _keep(self, kid: Object) -> bool:
+        if _is_removed_widget(self._resolver, kid):
+            self._drop(kid)
+            return False
+        return _indirect_id(kid) not in self.dropped
+
+    def _drop(self, obj: Object) -> None:
+        ident = _indirect_id(obj)
+        if ident is not None:
+            self.dropped.add(ident)
+
+
+def _prune_form(resolver: _Resolver) -> None:
+    """Drop the form fields whose widgets all went with the removed pages.
+
+    A widget on a removed page leaves its field's ``/Kids``, or ``/Fields``
+    if it is a field and widget in one, and a field left with no kids goes
+    too, and so on up the tree, value and all: it appears on no page.  The
+    calculation order ``/CO`` loses the fields dropped.  A form left with no
+    fields stays, with the rest of ``/AcroForm`` as it was.
+
+    Args:
+        resolver: The resolver for this remove_pages() call.
+    """
+    form = resolver.pdf.Root.get(Name.AcroForm)
+    if not isinstance(form, Dictionary):
+        return
+    pruner = _FormPruner(resolver)
+    pruner.prune(form)
+
+    order = form.get(Name.CO)
+    if isinstance(order, Array) and pruner.dropped:
+        kept = [field for field in order.as_list() if _indirect_id(field) not in pruner.dropped]
+        if len(kept) < len(order):
+            form.CO = Array(kept)
+
+
 def remove_pages(pdf: Pdf, pages: Pages) -> None:
     """Remove the given pages from a PDF in place.
 
@@ -798,8 +948,9 @@ def remove_pages(pdf: Pdf, pages: Pages) -> None:
     deleted, and the structure tree of a tagged PDF loses what belonged to
     the removed pages and those links.  An annotation a removed page shared
     with a remaining one names the first remaining page holding it as its
-    ``/P``.  Article threads and the interactive form are left as they are,
-    and a file using them keeps the pages they name in the saved file.
+    ``/P``, and the interactive form loses the fields whose widgets were all
+    on removed pages.  Article threads are left as they are, and a file
+    using them keeps the pages they name in the saved file.
 
     Args:
         pdf: A PDF file.
@@ -822,6 +973,7 @@ def remove_pages(pdf: Pdf, pages: Pages) -> None:
     _repoint_annotations(resolver)
     _prune_destinations(resolver)
     _prune_struct_tree(resolver)
+    _prune_form(resolver)
 
     # A file with no labels to begin with, or labels we cannot read, is left
     # with whatever it had: there is nothing to line back up with the pages.
