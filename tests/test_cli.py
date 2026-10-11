@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 import pikepdf
-from click.testing import CliRunner
+from click.testing import CliRunner, Result
 from pikepdf import OutlineItem
 
 from pagewielder import cli
@@ -69,9 +69,14 @@ class ExcerptCommandTest(unittest.TestCase):
         self.output_path = Path(tmp.name) / "output.pdf"
         _make_input_pdf(self.input_path)
 
+    def _excerpt(self, pages: str, output: Path | None = None) -> Result:
+        """Run the excerpt command on the input PDF, writing to the given output or the default one."""
+        output = self.output_path if output is None else output
+        return CliRunner().invoke(cli.main, ["excerpt", str(self.input_path), pages, "-o", str(output)])
+
     def test_preserves_outline_for_extracted_pages(self) -> None:
         """The outline survives extraction, pruned to the extracted pages."""
-        result = CliRunner().invoke(cli.main, ["excerpt", str(self.input_path), "2:3", "-o", str(self.output_path)])
+        result = self._excerpt("2:3")
         self.assertEqual(0, result.exit_code, result.output)
         self.assertIn(cli.MSG_EXTRACTED_PAGES.format(count=2, start=2, end=3, path=self.output_path), result.output)
 
@@ -81,14 +86,14 @@ class ExcerptCommandTest(unittest.TestCase):
 
     def test_rejects_invalid_page_range(self) -> None:
         """An invalid page range is reported as a usage error."""
-        result = CliRunner().invoke(cli.main, ["excerpt", str(self.input_path), "5", "-o", str(self.output_path)])
+        result = self._excerpt("5")
         self.assertEqual(2, result.exit_code)
         self.assertIn(cli.MSG_PAGE_OUT_OF_RANGE.format(page=5, total=4), result.stderr)
         self.assertFalse(self.output_path.exists())
 
     def test_refuses_to_overwrite_input(self) -> None:
         """Writing back over the input is refused."""
-        result = CliRunner().invoke(cli.main, ["excerpt", str(self.input_path), "1", "-o", str(self.input_path)])
+        result = self._excerpt("1", self.input_path)
         self.assertEqual(2, result.exit_code)
         self.assertIn(cli.MSG_SAME_PATHS, result.stderr)
 
