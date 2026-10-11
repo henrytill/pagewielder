@@ -11,7 +11,7 @@ from pikepdf import Dictionary, Name, OutlineItem
 
 from pagewielder import cli
 from pagewielder.core import Dimensions
-from tests.helpers import A4, PLATE, make_pdf, outline_titles, set_page_labels
+from tests.helpers import A4, PLATE, make_pdf, outline_titles, page_labels, set_page_labels
 
 
 def _make_input_pdf(path: Path) -> None:
@@ -124,7 +124,7 @@ class ExcerptCommandTest(CommandTestCase):
         self.assertIn(cli.MSG_EXTRACTED_PAGE.format(pages="-1", path=self.output_path), result.output)
 
         with pikepdf.open(self.output_path) as pdf:
-            self.assertEqual(["4"], [page.label for page in pdf.pages])
+            self.assertEqual(["4"], page_labels(pdf))
 
     def test_accepts_a_range_starting_with_a_minus_sign(self) -> None:
         """A range such as -3: is taken as the page range, not as an option."""
@@ -132,7 +132,7 @@ class ExcerptCommandTest(CommandTestCase):
         self.assertEqual(0, result.exit_code, result.output)
 
         with pikepdf.open(self.output_path) as pdf:
-            self.assertEqual(["2", "3", "4"], [page.label for page in pdf.pages])
+            self.assertEqual(["2", "3", "4"], page_labels(pdf))
 
     def test_step_skips_pages(self) -> None:
         """A step extracts every nth page."""
@@ -140,7 +140,7 @@ class ExcerptCommandTest(CommandTestCase):
         self.assertEqual(0, result.exit_code, result.output)
 
         with pikepdf.open(self.output_path) as pdf:
-            self.assertEqual(["1", "3"], [page.label for page in pdf.pages])
+            self.assertEqual(["1", "3"], page_labels(pdf))
 
     def test_rejects_invalid_page_range(self) -> None:
         """An invalid page range is reported as a usage error."""
