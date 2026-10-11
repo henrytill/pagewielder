@@ -125,28 +125,38 @@ def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> set[Dimen
             click.echo(PROMPT_INVALID_INPUT)
 
 
-def _resolve_output_path(input_path: Path, output: Path | None) -> Path:
-    """Choose the path to write to.
+def _check_output_path(input_path: Path, output: Path | None) -> None:
+    """Refuse an output path that is the one being read from.
 
     Args:
         input_path: The path the command reads from.
         output: The path requested on the command line, or None to write to a
             temporary file.
 
-    Returns:
-        The path to write to.
-
     Raises:
         click.UsageError: If the path is the one being read from.
     """
-    if output is None:
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmpfile:
-            output = Path(tmpfile.name)
-
-    if input_path == output:
+    if output == input_path:
         raise click.UsageError(MSG_SAME_PATHS)
 
-    return output
+
+def _output_path(output: Path | None) -> Path:
+    """Choose the path to write to, allocating a temporary file if none was given.
+
+    Called only once there is something to write, so that a command failing
+    or cancelled before then leaves no empty temporary file behind.
+
+    Args:
+        output: The path requested on the command line, or None to write to a
+            temporary file.
+
+    Returns:
+        The path to write to.
+    """
+    if output is not None:
+        return output
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmpfile:
+        return Path(tmpfile.name)
 
 
 _INPUT = click.argument("input_path", metavar="INPUT", type=click.Path(exists=True, dir_okay=False, path_type=Path))
@@ -181,7 +191,7 @@ def filter_command(input_path: Path, output: Path | None) -> None:
     Raises:
         click.exceptions.Exit: If no page sets are selected.
     """
-    output_path = _resolve_output_path(input_path, output)
+    _check_output_path(input_path, output)
 
     with pikepdf.open(input_path) as input_pdf:
         dimensions_to_pages = core.map_dimensions_to_pages(input_pdf)
@@ -196,6 +206,7 @@ def filter_command(input_path: Path, output: Path | None) -> None:
             selected_pages.update(dimensions_to_pages[page_dimensions])
 
         core.remove_pages(input_pdf, selected_pages)
+        output_path = _output_path(output)
         input_pdf.save(output_path)
 
     click.echo(MSG_FILTERED.format(path=output_path))
@@ -221,6 +232,8 @@ def excerpt_command(input_path: Path, pages: str, output: Path | None) -> None:
     Raises:
         click.BadParameter: If the page range is invalid.
     """
+    _check_output_path(input_path, output)
+
     with pikepdf.open(input_path) as input_pdf:
         total_pages = len(input_pdf.pages)
 
@@ -229,12 +242,9 @@ def excerpt_command(input_path: Path, pages: str, output: Path | None) -> None:
         except ValueError as e:
             raise click.BadParameter(str(e), param_hint="PAGES") from e
 
-        # Only once the range is known to be good, so that a bad one leaves no
-        # empty temporary file behind.
-        output_path = _resolve_output_path(input_path, output)
-
         outside_range = set(range(1, start_page)) | set(range(end_page + 1, total_pages + 1))
         core.remove_pages(input_pdf, outside_range)
+        output_path = _output_path(output)
         input_pdf.save(output_path)
 
     page_count = end_page - start_page + 1
