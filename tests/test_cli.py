@@ -1,14 +1,11 @@
 """Tests for pagewielder.cli."""
 
-import contextlib
-import io
 import tempfile
 import unittest
-from argparse import Namespace
 from pathlib import Path
-from unittest import mock
 
 import pikepdf
+from click.testing import CliRunner
 from pikepdf import OutlineItem
 
 from pagewielder import cli
@@ -32,10 +29,10 @@ class SelectDimensionsTest(unittest.TestCase):
 
     def _select(self, *answers: str) -> tuple[set[Dimensions] | None, str]:
         """Run select_dimensions with the given answers, returning its result and output."""
-        output = io.StringIO()
-        with mock.patch("builtins.input", side_effect=answers), contextlib.redirect_stdout(output):
+        with CliRunner().isolation(input="".join(f"{answer}\n" for answer in answers)) as (stdout, _, _):
             selected = cli.select_dimensions(self.DIMENSIONS_TO_PAGES)
-        return selected, output.getvalue()
+            output = stdout.getvalue().decode()
+        return selected, output
 
     def test_selects_by_index(self) -> None:
         """Comma-separated indices select the matching dimensions."""
@@ -62,21 +59,38 @@ class SelectDimensionsTest(unittest.TestCase):
 
 
 class ExcerptCommandTest(unittest.TestCase):
-    """Tests for excerpt_command."""
+    """Tests for the excerpt command."""
+
+    def setUp(self) -> None:
+        """Write a four-page input PDF to a temporary directory."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.input_path = Path(tmp.name) / "input.pdf"
+        self.output_path = Path(tmp.name) / "output.pdf"
+        _make_input_pdf(self.input_path)
 
     def test_preserves_outline_for_extracted_pages(self) -> None:
         """The outline survives extraction, pruned to the extracted pages."""
-        with tempfile.TemporaryDirectory() as tmp:
-            input_path = Path(tmp) / "input.pdf"
-            output_path = Path(tmp) / "output.pdf"
-            _make_input_pdf(input_path)
+        result = CliRunner().invoke(cli.main, ["excerpt", str(self.input_path), "2:3", "-o", str(self.output_path)])
+        self.assertEqual(0, result.exit_code, result.output)
+        self.assertIn(cli.MSG_EXTRACTED_PAGES.format(count=2, start=2, end=3, path=self.output_path), result.output)
 
-            args = Namespace(input=input_path, pages="2:3", output=output_path)
-            self.assertEqual(0, cli.excerpt_command(args))
+        with pikepdf.open(self.output_path) as pdf:
+            self.assertEqual(2, len(pdf.pages))
+            self.assertEqual(["Chapter 2"], outline_titles(pdf))
 
-            with pikepdf.open(output_path) as pdf:
-                self.assertEqual(2, len(pdf.pages))
-                self.assertEqual(["Chapter 2"], outline_titles(pdf))
+    def test_rejects_invalid_page_range(self) -> None:
+        """An invalid page range is reported as a usage error."""
+        result = CliRunner().invoke(cli.main, ["excerpt", str(self.input_path), "5", "-o", str(self.output_path)])
+        self.assertEqual(2, result.exit_code)
+        self.assertIn(cli.MSG_PAGE_OUT_OF_RANGE.format(page=5, total=4), result.stderr)
+        self.assertFalse(self.output_path.exists())
+
+    def test_refuses_to_overwrite_input(self) -> None:
+        """Writing back over the input is refused."""
+        result = CliRunner().invoke(cli.main, ["excerpt", str(self.input_path), "1", "-o", str(self.input_path)])
+        self.assertEqual(2, result.exit_code)
+        self.assertIn(cli.MSG_SAME_PATHS, result.stderr)
 
 
 class ParsePageRangeTest(unittest.TestCase):

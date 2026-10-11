@@ -4,7 +4,7 @@ This is the one instruction file. A `CLAUDE.md` symlink pointing here is a conve
 
 ## Project Overview
 
-pagewielder is a Python CLI tool for manipulating PDFs: filtering pages by dimensions and extracting page ranges. Built with pikepdf.
+pagewielder is a Python CLI tool for manipulating PDFs: filtering pages by dimensions and extracting page ranges. Built with pikepdf and Click.
 
 ## Development Commands
 
@@ -25,7 +25,7 @@ configuration outside the dev shell.
 
 The hooks are nixfmt, ruff (lint, with `--fix`) and ruff-format on the changed files, and mypy and pyright on the
 whole project, which both take what to check from `pyproject.toml`.  mypy and pyright run against `typingEnv`, a
-Python with pikepdf, since the hooks' own tools see no third-party packages otherwise.
+Python with the package's dependencies, since the hooks' own tools see no third-party packages otherwise.
 
 ### Version Generation
 
@@ -62,22 +62,26 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
   - `_Resolver` holds the removed pages, with `is_removed()` to test one, the stale links on the remaining pages, found up front with `is_stale_link()`, and the annotations removed with the pages (`removed_annots`, less any a remaining page shares), and answers the question every pruner asks, whether a target resolves to a removed page, through `targets_removed()`, following names and `/GoTo` actions. It reads `/Root /Dests` and the `/Names /Dests` tree (from `_dests_name_tree()`, built once per call) when it is made, so a pruner deleting a stale named destination cannot change how another target resolves, and the pruners run in any order.
   - Uses pikepdf's `Page`, `Rectangle`, `NameTree`, `NumberTree` and outline APIs.
 
-- **pagewielder/cli.py**: Command-line interface.
-  - Two commands: `filter` (interactive dimension selection) and `excerpt` (page range extraction).
+- **pagewielder/cli.py**: Command-line interface, built with Click.
+  - `main` is the Click group, and the console script's entry point.  Its two commands are
+    `filter_command` (`filter`, interactive dimension selection) and `excerpt_command`
+    (`excerpt`, page range extraction).  Their help text is passed as `help=`, so the
+    docstrings keep their Google-style sections out of `--help`.
   - `parse_page_range()`: Handles the page range syntax above, reading each number through
     `_parse_page_number()` so a malformed one gets the same message wherever it appears.
-  - `select_dimensions()`: Interactive prompt for dimension-based filtering.  Answers are looked
-    up by the labels it prints, not used as list indices, so a negative one is rejected.  The
-    tests drive it by patching `input`.
+  - `select_dimensions()`: Interactive prompt for dimension-based filtering, through
+    `click.prompt()`.  Answers are looked up by the labels it prints, not used as list indices,
+    so a negative one is rejected.  The tests drive it inside `CliRunner().isolation()`.
   - Every user-facing message is a module constant: `PROMPT_*` for everything
     `select_dimensions()` prints, `MSG_*` for the rest, with `str.format` fields where a message
-    carries values.  Tests match on these constants rather than on literal text.  argparse's own
-    strings (help, version) stay with the parser, and errors that only signal a bug, such as the
-    `TypeError`s in `main()`, stay inline.
-  - `_resolve_output_path()`: Shared by both commands; allocates the temporary file and rejects an output equal to the input.
-  - `main()` takes an optional argument sequence and returns an exit code, so it can be driven
-    directly.  The current tests call the `*_command` functions with a hand-built `Namespace`
-    instead; either entry point works.
+    carries values.  Tests match on these constants rather than on literal text.  Click's own
+    strings (help, version) stay with the commands, and errors that only signal a bug stay
+    inline.
+  - `_resolve_output_path()`: Shared by both commands; allocates the temporary file and rejects an output equal to the input with a `click.UsageError`.
+  - Errors in the arguments are Click usage errors, exit status 2: a missing input, an output
+    equal to the input, and an invalid page range (a `click.BadParameter` for `PAGES`).
+    Cancelling `filter`'s prompt exits with status 1.  The tests run the commands through
+    `click.testing.CliRunner`.
 
 - **pagewielder/__main__.py**: Entry point that delegates to `cli.main()`.
 
@@ -106,9 +110,9 @@ Uses hatchling for building. The package can also be built with Nix (see `flake.
 ### pyproject.toml Configuration
 - Python >=3.11 required
 - Version from `version.py` (see Version Generation); description is static
-- Single runtime dependency: pikepdf >=7.1.2
+- Runtime dependencies: click >=8.2, pikepdf >=7.1.2
 - Dev dependencies (`.[dev]`): mypy, pyright, ruff
-- Console script: `pagewielder = "pagewielder.__main__:main"`
+- Console script: `pagewielder = "pagewielder.cli:main"`
 - The package ships `py.typed`
 
 Tool settings live in `pyproject.toml`; see Code Style below for what they amount to.
@@ -126,7 +130,7 @@ The Nix build sets `PAGEWIELDER_GIT_REF` to the flake's revision, since the sand
 Tests use Python's unittest framework, discovered from `tests/`.
 
 - `tests/test_core.py`: `map_dimensions_to_pages` plus the bulk of the suite on `remove_pages` — outline pruning, link annotations, named destinations, `/GoTo` actions, `/PageLabels` remapping, the structure tree (`StructTreeTest`), the interactive form (`FormTest`), and the malformed-input cases.
-- `tests/test_cli.py`: `select_dimensions`, `parse_page_range` and an end-to-end `excerpt` run.
+- `tests/test_cli.py`: `select_dimensions`, `parse_page_range` and end-to-end `excerpt` runs through `CliRunner`.
 - `tests/helpers.py`: builders and readers shared by both — `make_pdf()`, `outline_titles()`, `link()`, `text_annotation()`, `widget()`, `field()`, `set_form()`, `set_annotations()`, `annotation_ids()`, `count_page_objects()`, `saved_page_objects()`, `set_named_destinations()`, `named_destinations()`, `struct_elem()`, `set_struct_tree()`, `parent_tree_keys()`, `kid_ids()`, `set_page_labels()`, `page_label_ranges()`, and the `A4` / `PLATE` page sizes. Prefer extending these over hand-rolling PDF fixtures.
 
 Run specific test:

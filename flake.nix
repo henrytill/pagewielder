@@ -34,7 +34,10 @@
           inherit version;
           pyproject = true;
           build-system = with pkgs.python3Packages; [ hatchling ];
-          dependencies = with pkgs.python3Packages; [ pikepdf ];
+          dependencies = with pkgs.python3Packages; [
+            click
+            pikepdf
+          ];
           src = self;
           # version.py asks git for the reference, and the sandbox has no .git.
           env.PAGEWIELDER_GIT_REF = gitRef;
