@@ -76,7 +76,7 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
     `select_dimensions()` prints, `MSG_*` for the rest, with `str.format` fields where a message
     carries values.  Tests match on these constants rather than on literal text.  Click's own
     strings (help, version) stay with the commands.
-  - `_resolve_output_path()`: Shared by both commands; allocates the temporary file and rejects an output equal to the input with a `click.UsageError`.
+  - `_check_output_path()` and `_output_path()`: Shared by both commands.  The first rejects an output equal to the input with a `click.UsageError`, before anything else runs; the second allocates the temporary file, only once there is something to save, so a command that fails or is cancelled leaves none behind.
   - Errors in the arguments are Click usage errors, exit status 2: a missing input, an output
     equal to the input, and an invalid page range (a `click.BadParameter` for `PAGES`).
     Cancelling `filter`'s prompt exits with status 1.

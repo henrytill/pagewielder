@@ -3,6 +3,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import pikepdf
 from click.testing import CliRunner, Result
@@ -58,16 +59,47 @@ class SelectDimensionsTest(unittest.TestCase):
         self.assertEqual(2, output.count(cli.PROMPT_INVALID_INPUT))
 
 
-class ExcerptCommandTest(unittest.TestCase):
-    """Tests for the excerpt command."""
+class CommandTestCase(unittest.TestCase):
+    """Base for the command tests, with an input PDF and a private temporary directory."""
 
     def setUp(self) -> None:
-        """Write a four-page input PDF to a temporary directory."""
+        """Write a four-page input PDF, and point tempfile at an empty directory of its own."""
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.input_path = Path(tmp.name) / "input.pdf"
         self.output_path = Path(tmp.name) / "output.pdf"
         _make_input_pdf(self.input_path)
+
+        # A fresh directory for the commands' temporary output files, so a test
+        # can see whether one was left behind.
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.temp_dir = Path(temp_dir.name)
+        patcher = mock.patch.object(tempfile, "tempdir", temp_dir.name)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+
+class FilterCommandTest(CommandTestCase):
+    """Tests for the filter command."""
+
+    def test_cancelling_leaves_no_temporary_file(self) -> None:
+        """Cancelling the prompt with no output path given creates no file."""
+        result = CliRunner().invoke(cli.main, ["filter", str(self.input_path)], input="\n")
+        self.assertEqual(1, result.exit_code)
+        self.assertIn(cli.MSG_NOTHING_SELECTED, result.stderr)
+        self.assertEqual([], list(self.temp_dir.iterdir()))
+
+    def test_refuses_to_overwrite_input_before_prompting(self) -> None:
+        """Writing back over the input is refused before the user is asked anything."""
+        result = CliRunner().invoke(cli.main, ["filter", str(self.input_path), "-o", str(self.input_path)])
+        self.assertEqual(2, result.exit_code)
+        self.assertIn(cli.MSG_SAME_PATHS, result.stderr)
+        self.assertNotIn(cli.PROMPT_AVAILABLE_DIMENSIONS, result.output)
+
+
+class ExcerptCommandTest(CommandTestCase):
+    """Tests for the excerpt command."""
 
     def _excerpt(self, pages: str, output: Path | None = None) -> Result:
         """Run the excerpt command on the input PDF, writing to the given output or the default one."""
@@ -90,6 +122,12 @@ class ExcerptCommandTest(unittest.TestCase):
         self.assertEqual(2, result.exit_code)
         self.assertIn(cli.MSG_PAGE_OUT_OF_RANGE.format(page=5, total=4), result.stderr)
         self.assertFalse(self.output_path.exists())
+
+    def test_invalid_page_range_leaves_no_temporary_file(self) -> None:
+        """An invalid page range with no output path given creates no file."""
+        result = CliRunner().invoke(cli.main, ["excerpt", str(self.input_path), "5"])
+        self.assertEqual(2, result.exit_code)
+        self.assertEqual([], list(self.temp_dir.iterdir()))
 
     def test_refuses_to_overwrite_input(self) -> None:
         """Writing back over the input is refused."""
