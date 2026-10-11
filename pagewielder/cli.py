@@ -55,13 +55,10 @@ def _parse_page_index(text: str) -> int:
 def parse_page_range(page_range: str, total_pages: int) -> range:
     """Parse a page range written in Python's slice syntax.
 
-    Pages are indexed from 0, and a negative index counts from the end.  A
-    single index selects one page and, like indexing a Python list, must name
-    one that exists.  A slice, ``start:stop`` or ``start:stop:step``, selects
-    what slicing a list of the pages would: the stop is excluded, an end left
-    out runs to the edge of the document, and an end beyond the edge is
-    clamped to it.  The step must be positive, since a negative one would ask
-    for the pages to be reordered rather than only removed.
+    The range selects what indexing or slicing a list of the document's pages
+    would, with two exceptions: the step must be positive, since a negative
+    one would ask for the pages to be reordered rather than only removed, and
+    a slice selecting no pages is an error.
 
     Args:
         page_range: A string representing a page range (e.g., "0:5", "-3:", "::2", "7")
