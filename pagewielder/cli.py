@@ -228,7 +228,9 @@ def filter_command(input_path: Path, output: Path | None) -> None:
 @main.command(
     "excerpt",
     # Passes a range starting with a minus sign, such as -1 or -3:, through as
-    # PAGES rather than rejecting it as an unknown option.
+    # PAGES rather than rejecting it as an unknown option.  Click has no way to
+    # do that for one argument only, so a mistyped option reaches PAGES too, and
+    # is reported as a bad page range or an extra argument instead.
     context_settings={"ignore_unknown_options": True},
     short_help="Extract a range of pages.",
     help="Extract the PAGES of INPUT, chosen with Python's slice syntax.  Pages are indexed from 0, a "
