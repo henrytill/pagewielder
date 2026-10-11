@@ -221,8 +221,6 @@ def excerpt_command(input_path: Path, pages: str, output: Path | None) -> None:
     Raises:
         click.BadParameter: If the page range is invalid.
     """
-    output_path = _resolve_output_path(input_path, output)
-
     with pikepdf.open(input_path) as input_pdf:
         total_pages = len(input_pdf.pages)
 
@@ -230,6 +228,10 @@ def excerpt_command(input_path: Path, pages: str, output: Path | None) -> None:
             start_page, end_page = parse_page_range(pages, total_pages)
         except ValueError as e:
             raise click.BadParameter(str(e), param_hint="PAGES") from e
+
+        # Only once the range is known to be good, so that a bad one leaves no
+        # empty temporary file behind.
+        output_path = _resolve_output_path(input_path, output)
 
         outside_range = set(range(1, start_page)) | set(range(end_page + 1, total_pages + 1))
         core.remove_pages(input_pdf, outside_range)
