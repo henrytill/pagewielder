@@ -68,7 +68,8 @@ def parse_page_range(page_range: str, total_pages: int) -> range:
         total_pages: The total number of pages in the document
 
     Returns:
-        The indices of the selected pages, in the order selected.
+        The selected pages, numbered from 1 as core numbers them, in document
+        order.
 
     Raises:
         ValueError: If the page range is malformed, has a step that is not
@@ -79,8 +80,8 @@ def parse_page_range(page_range: str, total_pages: int) -> range:
             index = _parse_page_index(index_text)
             if not -total_pages <= index < total_pages:
                 raise ValueError(MSG_INDEX_OUT_OF_RANGE.format(index=index, total=total_pages))
-            index %= total_pages
-            return range(index, index + 1)
+            number = index % total_pages + 1
+            return range(number, number + 1)
         case [start_text, stop_text]:
             step_text = ""
         case [start_text, stop_text, step_text]:
@@ -93,8 +94,9 @@ def parse_page_range(page_range: str, total_pages: int) -> range:
         raise ValueError(MSG_STEP_NOT_POSITIVE.format(step=step))
 
     # Slicing a range follows the rules for slicing a list, clamping included,
-    # and gives back a range.
-    pages = range(total_pages)[start:stop:step]
+    # and gives back a range.  Slicing the page numbers rather than range(total_pages)
+    # gives back pages numbered from 1, ready for core.
+    pages = range(1, total_pages + 1)[start:stop:step]
     if not pages:
         raise ValueError(MSG_NO_PAGES.format(text=page_range))
 
@@ -257,8 +259,7 @@ def excerpt_command(input_path: Path, pages: str, output: Path | None) -> None:
         except ValueError as e:
             raise click.BadParameter(str(e), param_hint="PAGES") from e
 
-        # remove_pages() numbers pages from 1.
-        core.remove_pages(input_pdf, set(range(1, total_pages + 1)) - {index + 1 for index in selected})
+        core.remove_pages(input_pdf, {number for number in range(1, total_pages + 1) if number not in selected})
         output_path = _output_path(output)
         input_pdf.save(output_path)
 
