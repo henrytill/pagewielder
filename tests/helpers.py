@@ -163,6 +163,13 @@ def set_page_labels(pdf: Pdf, nums: Sequence[int | Dictionary]) -> None:
     pdf.Root.PageLabels = pdf.make_indirect(Dictionary(Nums=Array(nums)))
 
 
+def page_labels(pdf: Pdf) -> list[str]:
+    """List the label each page of a PDF shows."""
+    # pikepdf's stubs declare Page.label as a method, though it is a property
+    # holding the label; str() satisfies the type checkers and changes nothing.
+    return [str(page.label) for page in pdf.pages]
+
+
 def page_label_ranges(pdf: Pdf) -> list[tuple[int, dict[str, str]]]:
     """List a PDF's /PageLabels ranges as plain Python values."""
     return [
