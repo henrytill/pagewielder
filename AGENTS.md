@@ -79,8 +79,7 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
   - `_resolve_output_path()`: Shared by both commands; allocates the temporary file and rejects an output equal to the input with a `click.UsageError`.
   - Errors in the arguments are Click usage errors, exit status 2: a missing input, an output
     equal to the input, and an invalid page range (a `click.BadParameter` for `PAGES`).
-    Cancelling `filter`'s prompt exits with status 1.  The tests run the commands through
-    `click.testing.CliRunner`.
+    Cancelling `filter`'s prompt exits with status 1.
 
 - **pagewielder/__main__.py**: Entry point that delegates to `cli.main()`.
 
