@@ -68,13 +68,13 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
     (`excerpt`, page range extraction).  Their help text is passed as `help=`, so the
     docstrings keep their Google-style sections out of `--help`.
   - `parse_page_range()`: Handles the page range syntax above, returning the selected
-    pages as a `range` of page numbers, numbered from 1 as `core` numbers them.  Slicing
-    `range(1, total_pages + 1)` does the work, so Python's rules, clamping included, come for
-    free.  Each index is read through
-    `_parse_page_index()`, so a malformed one gets the same message wherever it appears.
-    `excerpt` removes the pages not selected.  It sets `ignore_unknown_options`, so that a
-    range such as `-1` or `-3:` reaches it as `PAGES` rather than being rejected as an unknown
-    option.
+    pages as a `range` of page numbers, numbered from 1 as `core` numbers them.  Indexing and
+    slicing `range(1, total_pages + 1)` do the work, so Python's rules, negative indices and
+    clamping included, come for free.  Each index is read through `_parse_page_index()`, so a
+    malformed one gets the same message wherever it appears.
+  - `excerpt` removes the pages `parse_page_range()` did not select.  It sets
+    `ignore_unknown_options` so that a range such as `-1` or `-3:` reaches it as `PAGES`; the
+    comment there says what that costs.
   - `select_dimensions()`: Interactive prompt for dimension-based filtering, through
     `click.prompt()`.  Answers are looked up by the labels it prints, not used as list indices,
     so a negative one is rejected.  The tests drive it inside `CliRunner().isolation()`.
