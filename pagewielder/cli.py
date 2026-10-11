@@ -75,12 +75,18 @@ def parse_page_range(page_range: str, total_pages: int) -> range:
         ValueError: If the page range is malformed, has a step that is not
             positive, selects no pages, or is a single index naming no page.
     """
+    # Indexing and slicing a range follow the rules for a list, negative
+    # indices and clamping included.  Using the page numbers rather than
+    # range(total_pages) gives back pages numbered from 1, ready for core.
+    all_pages = range(1, total_pages + 1)
+
     match page_range.split(":"):
         case [index_text]:
             index = _parse_page_index(index_text)
-            if not -total_pages <= index < total_pages:
-                raise ValueError(MSG_INDEX_OUT_OF_RANGE.format(index=index, total=total_pages))
-            number = index % total_pages + 1
+            try:
+                number = all_pages[index]
+            except IndexError as e:
+                raise ValueError(MSG_INDEX_OUT_OF_RANGE.format(index=index, total=total_pages)) from e
             return range(number, number + 1)
         case [start_text, stop_text]:
             step_text = ""
@@ -93,10 +99,7 @@ def parse_page_range(page_range: str, total_pages: int) -> range:
     if step is not None and step < 1:
         raise ValueError(MSG_STEP_NOT_POSITIVE.format(step=step))
 
-    # Slicing a range follows the rules for slicing a list, clamping included,
-    # and gives back a range.  Slicing the page numbers rather than range(total_pages)
-    # gives back pages numbered from 1, ready for core.
-    pages = range(1, total_pages + 1)[start:stop:step]
+    pages = all_pages[start:stop:step]
     if not pages:
         raise ValueError(MSG_NO_PAGES.format(text=page_range))
 
