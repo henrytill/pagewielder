@@ -11,7 +11,7 @@ from .core import Dimensions, Pages
 
 # Every user-facing message lives here, so that tests can match on it rather
 # than on its text.  Click's own strings, help and version, stay with the
-# commands they configure, and errors that only signal a bug stay inline.
+# commands they configure.
 
 # Everything select_dimensions() prints.  click.prompt() adds the ": ".
 PROMPT_AVAILABLE_DIMENSIONS = "Available dimensions (width x height) and number of pages:"
