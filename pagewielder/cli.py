@@ -20,28 +20,28 @@ PROMPT_SELECT_DIMENSIONS = "Select page sets to remove by index (comma-separated
 PROMPT_INVALID_INPUT = "Invalid input. Please enter valid indices separated by commas.\n"
 
 # Page range errors, raised by parse_page_range().
-MSG_INVALID_PAGE = "Invalid page number: {text}"
-MSG_PAGE_OUT_OF_RANGE = "Page {page} is out of range (1-{total})"
-MSG_START_TOO_LOW = "Start page {start} must be >= 1"
-MSG_END_TOO_HIGH = "End page {end} exceeds total pages ({total})"
-MSG_START_AFTER_END = "Start page {start} must be <= end page {end}"
+MSG_INVALID_INDEX = "Invalid page index: {text}"
+MSG_INDEX_OUT_OF_RANGE = "Page index {index} is out of range for a document of {total} pages"
+MSG_TOO_MANY_COLONS = "Invalid page range: {text} (a slice has at most two colons)"
+MSG_STEP_NOT_POSITIVE = "Slice step must be positive, not {step}"
+MSG_NO_PAGES = "Page range {text} selects no pages"
 
 # Command output.
 MSG_SAME_PATHS = "Input and output paths must be different."
 MSG_NOTHING_SELECTED = "No page sets selected. No output file created."
 MSG_FILTERED = "Filtered PDF saved as {path}"
-MSG_EXTRACTED_PAGE = "Extracted 1 page ({start}:{end}) to {path}"
-MSG_EXTRACTED_PAGES = "Extracted {count} pages ({start}:{end}) to {path}"
+MSG_EXTRACTED_PAGE = "Extracted 1 page ({pages}) to {path}"
+MSG_EXTRACTED_PAGES = "Extracted {count} pages ({pages}) to {path}"
 
 
-def _parse_page_number(text: str) -> int:
-    """Parse one page number out of a page range.
+def _parse_page_index(text: str) -> int:
+    """Parse one page index out of a page range.
 
     Args:
-        text: The page number as written on the command line.
+        text: The page index as written on the command line.
 
     Returns:
-        The page number.
+        The page index.
 
     Raises:
         ValueError: If the text is not a whole number.
@@ -49,45 +49,56 @@ def _parse_page_number(text: str) -> int:
     try:
         return int(text)
     except ValueError as e:
-        raise ValueError(MSG_INVALID_PAGE.format(text=text)) from e
+        raise ValueError(MSG_INVALID_INDEX.format(text=text)) from e
 
 
-def parse_page_range(page_range: str, total_pages: int) -> tuple[int, int]:
-    """Parse a page range string and return start and end page numbers.
+def parse_page_range(page_range: str, total_pages: int) -> range:
+    """Parse a page range written in Python's slice syntax.
+
+    Pages are indexed from 0, and a negative index counts from the end.  A
+    single index selects one page and, like indexing a Python list, must name
+    one that exists.  A slice, ``start:stop`` or ``start:stop:step``, selects
+    what slicing a list of the pages would: the stop is excluded, an end left
+    out runs to the edge of the document, and an end beyond the edge is
+    clamped to it.  The step must be positive, since a negative one would ask
+    for the pages to be reordered rather than only removed.
 
     Args:
-        page_range: A string representing a page range (e.g., "1:5", "3:", ":10")
+        page_range: A string representing a page range (e.g., "0:5", "-3:", "::2", "7")
         total_pages: The total number of pages in the document
 
     Returns:
-        A tuple of (start_page, end_page) using 1-based indexing
+        The indices of the selected pages, in the order selected.
 
     Raises:
-        ValueError: If the page range is invalid
+        ValueError: If the page range is malformed, has a step that is not
+            positive, selects no pages, or is a single index naming no page.
     """
-    parts = page_range.split(":", 1)
+    match page_range.split(":"):
+        case [index_text]:
+            index = _parse_page_index(index_text)
+            if not -total_pages <= index < total_pages:
+                raise ValueError(MSG_INDEX_OUT_OF_RANGE.format(index=index, total=total_pages))
+            index %= total_pages
+            return range(index, index + 1)
+        case [start_text, stop_text]:
+            step_text = ""
+        case [start_text, stop_text, step_text]:
+            pass
+        case _:
+            raise ValueError(MSG_TOO_MANY_COLONS.format(text=page_range))
 
-    if len(parts) == 1:
-        # Single page
-        page = _parse_page_number(parts[0])
-        if page < 1 or page > total_pages:
-            raise ValueError(MSG_PAGE_OUT_OF_RANGE.format(page=page, total=total_pages))
-        return (page, page)
+    start, stop, step = (_parse_page_index(text) if text else None for text in (start_text, stop_text, step_text))
+    if step is not None and step < 1:
+        raise ValueError(MSG_STEP_NOT_POSITIVE.format(step=step))
 
-    # Range.  A split with maxsplit=1 yields no more than two parts.
-    start_str, end_str = parts
+    # Slicing a range follows the rules for slicing a list, clamping included,
+    # and gives back a range.
+    pages = range(total_pages)[start:stop:step]
+    if not pages:
+        raise ValueError(MSG_NO_PAGES.format(text=page_range))
 
-    start = 1 if not start_str else _parse_page_number(start_str)
-    end = total_pages if not end_str else _parse_page_number(end_str)
-
-    if start < 1:
-        raise ValueError(MSG_START_TOO_LOW.format(start=start))
-    if end > total_pages:
-        raise ValueError(MSG_END_TOO_HIGH.format(end=end, total=total_pages))
-    if start > end:
-        raise ValueError(MSG_START_AFTER_END.format(start=start, end=end))
-
-    return (start, end)
+    return pages
 
 
 def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> set[Dimensions] | None:
@@ -214,9 +225,13 @@ def filter_command(input_path: Path, output: Path | None) -> None:
 
 @main.command(
     "excerpt",
+    # Passes a range starting with a minus sign, such as -1 or -3:, through as
+    # PAGES rather than rejecting it as an unknown option.
+    context_settings={"ignore_unknown_options": True},
     short_help="Extract a range of pages.",
-    help="Extract the PAGES of INPUT, a range such as 1:5, 3:, :10 or 7.  "
-    "Pages are numbered from 1 and both ends are included, so 1:5 is the first five pages.",
+    help="Extract the PAGES of INPUT, chosen with Python's slice syntax.  Pages are indexed from 0, a "
+    "negative index counts from the end, and a slice excludes its stop: 0:5 is the first five pages, 7 the "
+    "eighth, -3: the last three, and ::2 every other page.  The step must be positive.",
 )
 @_INPUT
 @click.argument("pages")
@@ -238,15 +253,14 @@ def excerpt_command(input_path: Path, pages: str, output: Path | None) -> None:
         total_pages = len(input_pdf.pages)
 
         try:
-            start_page, end_page = parse_page_range(pages, total_pages)
+            selected = parse_page_range(pages, total_pages)
         except ValueError as e:
             raise click.BadParameter(str(e), param_hint="PAGES") from e
 
-        outside_range = set(range(1, start_page)) | set(range(end_page + 1, total_pages + 1))
-        core.remove_pages(input_pdf, outside_range)
+        # remove_pages() numbers pages from 1.
+        core.remove_pages(input_pdf, set(range(1, total_pages + 1)) - {index + 1 for index in selected})
         output_path = _output_path(output)
         input_pdf.save(output_path)
 
-    page_count = end_page - start_page + 1
-    message = MSG_EXTRACTED_PAGE if page_count == 1 else MSG_EXTRACTED_PAGES
-    click.echo(message.format(count=page_count, start=start_page, end=end_page, path=output_path))
+    message = MSG_EXTRACTED_PAGE if len(selected) == 1 else MSG_EXTRACTED_PAGES
+    click.echo(message.format(count=len(selected), pages=pages, path=output_path))

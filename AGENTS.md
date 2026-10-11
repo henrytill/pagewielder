@@ -46,7 +46,7 @@ python -m pagewielder excerpt <input.pdf> <pages> [-o <output.pdf>]  # Extract p
 python -m pagewielder --version
 ```
 
-Page ranges use 1-based indexing: `1:5` (pages 1-5), `3:` (page 3 to end), `:10` (start to page 10), `7` (page 7 only).
+Page ranges use Python's slice syntax, indexing pages from 0: `0:5` (the first five pages), `7` (the eighth page only), `-3:` (the last three), `::2` (every other page). A slice excludes its stop, and an end beyond the document is clamped to it, as in Python. Unlike Python, the step must be positive, since a negative one would reorder pages and the commands only remove them; a single index must name a page that exists, and a range that selects nothing is an error.
 
 With no `-o`, both commands write to a fresh temporary file and print its path. Writing back over the input is refused.
 
@@ -67,8 +67,13 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
     `filter_command` (`filter`, interactive dimension selection) and `excerpt_command`
     (`excerpt`, page range extraction).  Their help text is passed as `help=`, so the
     docstrings keep their Google-style sections out of `--help`.
-  - `parse_page_range()`: Handles the page range syntax above, reading each number through
-    `_parse_page_number()` so a malformed one gets the same message wherever it appears.
+  - `parse_page_range()`: Handles the page range syntax above, returning the selected
+    0-based indices as a `range`, in document order.  Slicing `range(total_pages)` does the
+    work, so Python's rules, clamping included, come for free.  Each index is read through
+    `_parse_page_index()`, so a malformed one gets the same message wherever it appears.
+    `excerpt` removes the pages not selected.  It sets `ignore_unknown_options`, so that a
+    range such as `-1` or `-3:` reaches it as `PAGES` rather than being rejected as an unknown
+    option.
   - `select_dimensions()`: Interactive prompt for dimension-based filtering, through
     `click.prompt()`.  Answers are looked up by the labels it prints, not used as list indices,
     so a negative one is rejected.  The tests drive it inside `CliRunner().isolation()`.
