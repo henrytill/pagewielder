@@ -1,25 +1,22 @@
 """Command-line interface for pagewielder."""
 
-import argparse
-import sys
 import tempfile
-from argparse import Namespace
-from collections.abc import Sequence
 from pathlib import Path
 
+import click
 import pikepdf
 
 from . import __version__, core
 from .core import Dimensions, Pages
 
 # Every user-facing message lives here, so that tests can match on it rather
-# than on its text.  argparse's own strings, help and version, stay with the
-# parser they configure, and errors that only signal a bug stay inline.
+# than on its text.  Click's own strings, help and version, stay with the
+# commands they configure, and errors that only signal a bug stay inline.
 
-# Everything select_dimensions() prints.
+# Everything select_dimensions() prints.  click.prompt() adds the ": ".
 PROMPT_AVAILABLE_DIMENSIONS = "Available dimensions (width x height) and number of pages:"
 PROMPT_DIMENSIONS_CHOICE = "{index}: {width:.2f} x {height:.2f} ({count} pages)"
-PROMPT_SELECT_DIMENSIONS = "Select page sets to remove by index (comma-separated) or press Enter to cancel: "
+PROMPT_SELECT_DIMENSIONS = "Select page sets to remove by index (comma-separated) or press Enter to cancel"
 PROMPT_INVALID_INPUT = "Invalid input. Please enter valid indices separated by commas.\n"
 
 # Page range errors, raised by parse_page_range().
@@ -30,7 +27,6 @@ MSG_END_TOO_HIGH = "End page {end} exceeds total pages ({total})"
 MSG_START_AFTER_END = "Start page {start} must be <= end page {end}"
 
 # Command output.
-MSG_ERROR = "Error: {error}"
 MSG_SAME_PATHS = "Input and output paths must be different."
 MSG_NOTHING_SELECTED = "No page sets selected. No output file created."
 MSG_FILTERED = "Filtered PDF saved as {path}"
@@ -110,25 +106,27 @@ def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> set[Dimen
     # anything: indexing a list would also accept a negative index.
     choices = dict(enumerate(dimensions_to_pages))
 
-    print(PROMPT_AVAILABLE_DIMENSIONS)
+    click.echo(PROMPT_AVAILABLE_DIMENSIONS)
 
     for i, dimensions in choices.items():
         width, height = dimensions
         num_pages = len(dimensions_to_pages[dimensions])
-        print(PROMPT_DIMENSIONS_CHOICE.format(index=i, width=width, height=height, count=num_pages))
+        click.echo(PROMPT_DIMENSIONS_CHOICE.format(index=i, width=width, height=height, count=num_pages))
 
     while True:
-        user_input = input(PROMPT_SELECT_DIMENSIONS)
+        # Without a default, click.prompt() would ask again on an empty answer
+        # rather than let it cancel.
+        user_input: str = click.prompt(PROMPT_SELECT_DIMENSIONS, default="", show_default=False)
         if not user_input:
             return None
         try:
             return {choices[int(index)] for index in user_input.split(",")}
         except (ValueError, KeyError):
-            print(PROMPT_INVALID_INPUT)
+            click.echo(PROMPT_INVALID_INPUT)
 
 
-def _resolve_output_path(input_path: Path, output: Path | None) -> Path | None:
-    """Choose the path to write to, reporting a collision with the input.
+def _resolve_output_path(input_path: Path, output: Path | None) -> Path:
+    """Choose the path to write to.
 
     Args:
         input_path: The path the command reads from.
@@ -136,42 +134,62 @@ def _resolve_output_path(input_path: Path, output: Path | None) -> Path | None:
             temporary file.
 
     Returns:
-        The path to write to, or None if it is the one being read from, in
-        which case the reason has been reported on stderr.
+        The path to write to.
+
+    Raises:
+        click.UsageError: If the path is the one being read from.
     """
     if output is None:
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmpfile:
             output = Path(tmpfile.name)
 
     if input_path == output:
-        print(MSG_SAME_PATHS, file=sys.stderr)
-        return None
+        raise click.UsageError(MSG_SAME_PATHS)
 
     return output
 
 
-def filter_command(args: Namespace) -> int:
+_INPUT = click.argument("input_path", metavar="INPUT", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+_OUTPUT = click.option(
+    "-o",
+    "--output",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Path to the output PDF file.  Defaults to a fresh temporary file.",
+)
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.version_option(__version__, prog_name="pagewielder", message="%(prog)s %(version)s")
+def main() -> None:
+    """Manipulate PDFs."""
+
+
+@main.command(
+    "filter",
+    short_help="Remove pages by their dimensions.",
+    help="Remove pages from INPUT by their dimensions, chosen interactively.",
+)
+@_INPUT
+@_OUTPUT
+def filter_command(input_path: Path, output: Path | None) -> None:
     """Filter a PDF file based on page dimensions.
 
     Args:
-        args: Command-line arguments.
+        input_path: The PDF to read.
+        output: The PDF to write, or None to write to a temporary file.
 
-    Returns:
-        An exit code.
+    Raises:
+        click.exceptions.Exit: If no page sets are selected.
     """
-    input_path: Path = args.input
-    output_path = _resolve_output_path(input_path, args.output)
-
-    if output_path is None:
-        return 1
+    output_path = _resolve_output_path(input_path, output)
 
     with pikepdf.open(input_path) as input_pdf:
         dimensions_to_pages = core.map_dimensions_to_pages(input_pdf)
         maybe_selected_dimensions = select_dimensions(dimensions_to_pages)
 
         if maybe_selected_dimensions is None:
-            print(MSG_NOTHING_SELECTED, file=sys.stderr)
-            return 1
+            click.echo(MSG_NOTHING_SELECTED, err=True)
+            raise click.exceptions.Exit(1)
 
         selected_pages: Pages = set()
         for page_dimensions in maybe_selected_dimensions:
@@ -180,34 +198,38 @@ def filter_command(args: Namespace) -> int:
         core.remove_pages(input_pdf, selected_pages)
         input_pdf.save(output_path)
 
-    print(MSG_FILTERED.format(path=output_path))
-
-    return 0
+    click.echo(MSG_FILTERED.format(path=output_path))
 
 
-def excerpt_command(args: Namespace) -> int:
+@main.command(
+    "excerpt",
+    short_help="Extract a range of pages.",
+    help="Extract the PAGES of INPUT, a range such as 1:5, 3:, :10 or 7.  "
+    "Pages are numbered from 1 and both ends are included, so 1:5 is the first five pages.",
+)
+@_INPUT
+@click.argument("pages")
+@_OUTPUT
+def excerpt_command(input_path: Path, pages: str, output: Path | None) -> None:
     """Extract a range of pages from a PDF file.
 
     Args:
-        args: Command-line arguments.
+        input_path: The PDF to read.
+        pages: The page range to keep.
+        output: The PDF to write, or None to write to a temporary file.
 
-    Returns:
-        An exit code.
+    Raises:
+        click.BadParameter: If the page range is invalid.
     """
-    input_path: Path = args.input
-    output_path = _resolve_output_path(input_path, args.output)
-
-    if output_path is None:
-        return 1
+    output_path = _resolve_output_path(input_path, output)
 
     with pikepdf.open(input_path) as input_pdf:
         total_pages = len(input_pdf.pages)
 
         try:
-            start_page, end_page = parse_page_range(args.pages, total_pages)
+            start_page, end_page = parse_page_range(pages, total_pages)
         except ValueError as e:
-            print(MSG_ERROR.format(error=e), file=sys.stderr)
-            return 1
+            raise click.BadParameter(str(e), param_hint="PAGES") from e
 
         outside_range = set(range(1, start_page)) | set(range(end_page + 1, total_pages + 1))
         core.remove_pages(input_pdf, outside_range)
@@ -215,46 +237,4 @@ def excerpt_command(args: Namespace) -> int:
 
     page_count = end_page - start_page + 1
     message = MSG_EXTRACTED_PAGE if page_count == 1 else MSG_EXTRACTED_PAGES
-    print(message.format(count=page_count, start=start_page, end=end_page, path=output_path))
-
-    return 0
-
-
-def main(args: Sequence[str] | None = None) -> int:
-    """The main entry point for the command-line interface.
-
-    Args:
-        args: Command-line arguments, defaulting to those of the process.
-
-    Returns:
-        An exit code.
-    """
-    parser = argparse.ArgumentParser(description="pagewielder")
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    subparsers = parser.add_subparsers(help="Commands")
-
-    filter_parser = subparsers.add_parser("filter", help="Filter PDF pages based on dimensions")
-    filter_parser.add_argument("input", type=Path, help="Path to the input PDF file")
-    filter_parser.add_argument("-o", "--output", type=Path, help="Path to the output PDF file (optional)")
-    filter_parser.set_defaults(func=filter_command)
-
-    excerpt_parser = subparsers.add_parser("excerpt", help="Extract a range of pages from a PDF")
-    excerpt_parser.add_argument("input", type=Path, help="Path to the input PDF file")
-    excerpt_parser.add_argument("pages", help="Page range to extract (e.g., 1:5, 3:, :10, 7)")
-    excerpt_parser.add_argument("-o", "--output", type=Path, help="Path to the output PDF file (optional)")
-    excerpt_parser.set_defaults(func=excerpt_command)
-
-    parsed = parser.parse_args(args)
-
-    if not hasattr(parsed, "func"):
-        parser.print_help()
-        return 2
-
-    if not callable(parsed.func):
-        raise TypeError("Expected callable")
-
-    ret = parsed.func(parsed)
-    if not isinstance(ret, int):
-        raise TypeError("Expected int")
-
-    return ret
+    click.echo(message.format(count=page_count, start=start_page, end=end_page, path=output_path))
