@@ -68,8 +68,9 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
     (`excerpt`, page range extraction).  Their help text is passed as `help=`, so the
     docstrings keep their Google-style sections out of `--help`.
   - `parse_page_range()`: Handles the page range syntax above, returning the selected
-    0-based indices as a `range`, in document order.  Slicing `range(total_pages)` does the
-    work, so Python's rules, clamping included, come for free.  Each index is read through
+    pages as a `range` of page numbers, numbered from 1 as `core` numbers them.  Slicing
+    `range(1, total_pages + 1)` does the work, so Python's rules, clamping included, come for
+    free.  Each index is read through
     `_parse_page_index()`, so a malformed one gets the same message wherever it appears.
     `excerpt` removes the pages not selected.  It sets `ignore_unknown_options`, so that a
     range such as `-1` or `-3:` reaches it as `PAGES` rather than being rejected as an unknown

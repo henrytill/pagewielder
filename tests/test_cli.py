@@ -166,23 +166,23 @@ class ParsePageRangeTest(unittest.TestCase):
     """Tests for parse_page_range."""
 
     def test_selects_what_python_would(self) -> None:
-        """Indices and slices select what they would from a list of the pages."""
+        """Indices and slices select what they would from a list of the pages, as page numbers."""
         cases = {
-            "0": [0],
-            "5": [5],
-            "-1": [5],
-            "-6": [0],
-            "0:3": [0, 1, 2],
-            "3:": [3, 4, 5],
-            ":2": [0, 1],
-            ":": [0, 1, 2, 3, 4, 5],
-            ":-1": [0, 1, 2, 3, 4],
-            "-2:": [4, 5],
-            "::2": [0, 2, 4],
-            "1::3": [1, 4],
-            "1:3:": [1, 2],
-            "0:99": [0, 1, 2, 3, 4, 5],
-            "-99:2": [0, 1],
+            "0": [1],
+            "5": [6],
+            "-1": [6],
+            "-6": [1],
+            "0:3": [1, 2, 3],
+            "3:": [4, 5, 6],
+            ":2": [1, 2],
+            ":": [1, 2, 3, 4, 5, 6],
+            ":-1": [1, 2, 3, 4, 5],
+            "-2:": [5, 6],
+            "::2": [1, 3, 5],
+            "1::3": [2, 5],
+            "1:3:": [2, 3],
+            "0:99": [1, 2, 3, 4, 5, 6],
+            "-99:2": [1, 2],
         }
         for page_range, expected in cases.items():
             with self.subTest(page_range=page_range):
