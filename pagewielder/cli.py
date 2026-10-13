@@ -139,7 +139,10 @@ def select_dimensions(dimensions_to_pages: dict[Dimensions, Pages]) -> set[Dimen
 
 
 def _check_output_path(input_path: Path, output: Path | None) -> None:
-    """Refuse an output path that is the one being read from.
+    """Refuse an output path that names the file being read from.
+
+    The path may be spelled differently from the input's, or reach the same
+    file through a symbolic or hard link.
 
     Args:
         input_path: The path the command reads from.
@@ -147,9 +150,11 @@ def _check_output_path(input_path: Path, output: Path | None) -> None:
             temporary file.
 
     Raises:
-        click.UsageError: If the path is the one being read from.
+        click.UsageError: If the path names the file being read from.
     """
-    if output == input_path:
+    # Comparing the files rather than the paths catches every spelling and
+    # link.  An output that does not exist yet cannot be the input, which does.
+    if output is not None and output.exists() and output.samefile(input_path):
         raise click.UsageError(MSG_SAME_PATHS)
 
 

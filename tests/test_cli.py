@@ -1,5 +1,6 @@
 """Tests for pagewielder.cli."""
 
+import contextlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -160,6 +161,27 @@ class ExcerptCommandTest(CommandTestCase):
         result = self._excerpt("1", self.input_path)
         self.assertEqual(2, result.exit_code)
         self.assertIn(cli.MSG_SAME_PATHS, result.stderr)
+
+    def test_refuses_to_overwrite_input_under_another_name(self) -> None:
+        """Writing back over the input is refused however the output path reaches it."""
+        directory = self.input_path.parent
+        symlink = directory / "symlink.pdf"
+        symlink.symlink_to(self.input_path)
+        hard_link = directory / "hard-link.pdf"
+        hard_link.hardlink_to(self.input_path)
+        before = self.input_path.read_bytes()
+
+        for output in [
+            Path(self.input_path.name),
+            directory / ".." / directory.name / self.input_path.name,
+            symlink,
+            hard_link,
+        ]:
+            with self.subTest(output=output), contextlib.chdir(directory):
+                result = self._excerpt("1", output)
+                self.assertEqual(2, result.exit_code)
+                self.assertIn(cli.MSG_SAME_PATHS, result.stderr)
+        self.assertEqual(before, self.input_path.read_bytes())
 
 
 class ParsePageRangeTest(unittest.TestCase):
