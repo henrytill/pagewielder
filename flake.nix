@@ -27,9 +27,12 @@
       baseVersion = nixpkgs.lib.trim (builtins.readFile ./VERSION);
       gitRef = self.shortRev or self.dirtyShortRev;
       version = "${baseVersion}+${gitRef}";
-      makePagewielder =
-        pkgs:
-        pkgs.python3Packages.buildPythonApplication {
+    in
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+        pagewielder = pkgs.python3Packages.buildPythonApplication {
           pname = "pagewielder";
           inherit version;
           pyproject = true;
@@ -48,12 +51,6 @@
             "tests"
           ];
         };
-    in
-    flake-utils.lib.eachDefaultSystem (
-      system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-        pagewielder = makePagewielder pkgs;
         # The type checkers need to import pikepdf, which the hooks' own tools don't see otherwise.
         typingEnv = pkgs.python3.withPackages (ps: pagewielder.dependencies ++ [ ps.mypy ]);
         preCommit = git-hooks.lib.${system}.run {
