@@ -152,8 +152,7 @@ def _check_output_path(input_path: Path, output: Path | None) -> None:
     Raises:
         click.UsageError: If the path names the file being read from.
     """
-    # Comparing the files rather than the paths catches every spelling and
-    # link.  An output that does not exist yet cannot be the input, which does.
+    # An output that does not exist yet cannot be the input, which does.
     if output is not None and output.exists() and output.samefile(input_path):
         raise click.UsageError(MSG_SAME_FILE)
 
