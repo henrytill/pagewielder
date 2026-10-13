@@ -27,7 +27,7 @@ MSG_STEP_NOT_POSITIVE = "Slice step must be positive, not {step}"
 MSG_NO_PAGES = "Page range {text} selects no pages"
 
 # Command output.
-MSG_SAME_PATHS = "Input and output paths must be different."
+MSG_SAME_FILE = "Output must not be the input file."
 MSG_NOTHING_SELECTED = "No page sets selected. No output file created."
 MSG_FILTERED = "Filtered PDF saved as {path}"
 MSG_EXTRACTED_PAGE = "Extracted 1 page ({pages}) to {path}"
@@ -155,7 +155,7 @@ def _check_output_path(input_path: Path, output: Path | None) -> None:
     # Comparing the files rather than the paths catches every spelling and
     # link.  An output that does not exist yet cannot be the input, which does.
     if output is not None and output.exists() and output.samefile(input_path):
-        raise click.UsageError(MSG_SAME_PATHS)
+        raise click.UsageError(MSG_SAME_FILE)
 
 
 def _output_path(output: Path | None) -> Path:
