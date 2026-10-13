@@ -96,7 +96,7 @@ class FilterCommandTest(CommandTestCase):
         """Writing back over the input is refused before the user is asked anything."""
         result = CliRunner().invoke(cli.main, ["filter", str(self.input_path), "-o", str(self.input_path)])
         self.assertEqual(2, result.exit_code)
-        self.assertIn(cli.MSG_SAME_PATHS, result.stderr)
+        self.assertIn(cli.MSG_SAME_FILE, result.stderr)
         self.assertNotIn(cli.PROMPT_AVAILABLE_DIMENSIONS, result.output)
 
 
@@ -175,7 +175,7 @@ class ExcerptCommandTest(CommandTestCase):
             with self.subTest(output=output), contextlib.chdir(directory):
                 result = self._excerpt("1", output)
                 self.assertEqual(2, result.exit_code)
-                self.assertIn(cli.MSG_SAME_PATHS, result.stderr)
+                self.assertIn(cli.MSG_SAME_FILE, result.stderr)
         self.assertEqual(before, self.input_path.read_bytes())
 
 
