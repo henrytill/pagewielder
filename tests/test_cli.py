@@ -157,13 +157,7 @@ class ExcerptCommandTest(CommandTestCase):
         self.assertEqual([], list(self.temp_dir.iterdir()))
 
     def test_refuses_to_overwrite_input(self) -> None:
-        """Writing back over the input is refused."""
-        result = self._excerpt("1", self.input_path)
-        self.assertEqual(2, result.exit_code)
-        self.assertIn(cli.MSG_SAME_PATHS, result.stderr)
-
-    def test_refuses_to_overwrite_input_under_another_name(self) -> None:
-        """Writing back over the input is refused however the output path reaches it."""
+        """Writing back over the input is refused, however the output path reaches it."""
         directory = self.input_path.parent
         symlink = directory / "symlink.pdf"
         symlink.symlink_to(self.input_path)
@@ -172,6 +166,7 @@ class ExcerptCommandTest(CommandTestCase):
         before = self.input_path.read_bytes()
 
         for output in [
+            self.input_path,
             Path(self.input_path.name),
             directory / ".." / directory.name / self.input_path.name,
             symlink,
