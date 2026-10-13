@@ -48,7 +48,7 @@ python -m pagewielder --version
 
 Page ranges use Python's slice syntax, indexing pages from 0: `0:5` (the first five pages), `7` (the eighth page only), `-3:` (the last three), `::2` (every other page). A slice excludes its stop, and an end beyond the document is clamped to it, as in Python. Unlike Python, the step must be positive, since a negative one would reorder pages and the commands only remove them; a single index must name a page that exists, and a range that selects nothing is an error.
 
-With no `-o`, both commands write to a fresh temporary file and print its path. Writing back over the input is refused.
+With no `-o`, both commands write to a fresh temporary file and print its path. Writing back over the input is refused, whether the output path names it as typed, under another spelling, or through a symbolic or hard link.
 
 ## Architecture
 
@@ -82,9 +82,9 @@ With no `-o`, both commands write to a fresh temporary file and print its path. 
     `select_dimensions()` prints, `MSG_*` for the rest, with `str.format` fields where a message
     carries values.  Tests match on these constants rather than on literal text.  Click's own
     strings (help, version) stay with the commands.
-  - `_check_output_path()` and `_output_path()`: Shared by both commands.  The first rejects an output equal to the input with a `click.UsageError`, before anything else runs; the second allocates the temporary file, only once there is something to save, so a command that fails or is cancelled before saving leaves none behind.
+  - `_check_output_path()` and `_output_path()`: Shared by both commands.  The first rejects an output that is the input file, compared with `Path.samefile()` so that any spelling or link counts, with a `click.UsageError`, before anything else runs; the second allocates the temporary file, only once there is something to save, so a command that fails or is cancelled before saving leaves none behind.
   - Errors in the arguments are Click usage errors, exit status 2: a missing input, an output
-    equal to the input, and an invalid page range (a `click.BadParameter` for `PAGES`).
+    naming the input file, and an invalid page range (a `click.BadParameter` for `PAGES`).
     Cancelling `filter`'s prompt exits with status 1.
 
 - **pagewielder/__main__.py**: Entry point that delegates to `cli.main()`.
