@@ -54,7 +54,7 @@
         # The type checkers need to import pikepdf, which the hooks' own tools don't see otherwise.
         typingEnv = pkgs.python3.withPackages (ps: pagewielder.dependencies ++ [ ps.mypy ]);
         preCommit = git-hooks.lib.${system}.run {
-          src = self;
+          src = self.outPath;
           hooks = {
             nixfmt.enable = true;
             ruff.enable = true;
